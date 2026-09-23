@@ -7,11 +7,13 @@ public class FlyHackConfig extends ModuleConfig implements Sanitizable {
     public boolean overrideFlyingSpeed;
     public float flyingSpeed;
     public boolean onGroundFlag;
+    public boolean reportOnGroundWithGun;
 
     public FlyHackConfig() {
         enabled = false;
         overrideFlyingSpeed = false;
         flyingSpeed = 0.05f;
+        reportOnGroundWithGun = true;
     }
 
     @Override

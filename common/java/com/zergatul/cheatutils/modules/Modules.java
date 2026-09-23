@@ -75,6 +75,9 @@ public class Modules {
         register(ContainerSummary.instance);
         register(Schematica.instance);
         register(AimAssist.instance);
+        register(TaczAimAssist.instance);
+        register(TaczNoRecoil.instance);
+        register(TaczAlwaysAim.instance);
 
         register(ClientTickEndExecutor.instance);
         register(InGameTickEndExecutor.instance);

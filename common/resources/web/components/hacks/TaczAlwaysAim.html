@@ -1,0 +1,49 @@
+<div class="module-main" v-if="config">
+    <div class="description">
+        Makes every TaCZ shot use the AIM accuracy stance, no matter how you move or where you are.
+    </div>
+
+    <div class="module-sections">
+        <div>
+            <switch-checkbox v-model="config.enabled" @change="update()">Enabled</switch-checkbox>
+        </div>
+
+        <fieldset>
+            <legend>What It Does</legend>
+            <div class="section-description">
+                TaCZ picks the bullet spread from your stance: <b>AIM</b> while the aim animation is
+                complete, otherwise <b>LIE</b>, <b>SNEAK</b>, <b>MOVE</b> (any movement, including
+                jumping) or <b>STAND</b>. Those values differ a lot - for the default SCAR-L the AIM
+                stance is 0.125&deg; while standing is 5&deg; and moving is 5.5&deg;.
+                <br><br>
+                The stance is decided on the server from the aiming state the client reports.
+                While this module is enabled the aim key is reported as held, so the server keeps
+                you in the AIM stance all the time:
+                <ul>
+                    <li>every shot uses the AIM spread, in the air, while moving, hip-fired, anywhere;</li>
+                    <li>your own aim key still works - press it and the view zooms as usual;</li>
+                    <li>releasing the aim key no longer drops you out of the AIM stance.</li>
+                </ul>
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Movement</legend>
+            <div>
+                <switch-checkbox v-model="config.keepMovement" @change="update()">Don't Affect Movement</switch-checkbox>
+                <div class="section-description">
+                    While aiming TaCZ applies a movement-speed penalty (the gun's aim multiplier,
+                    -15% for the default SCAR-L) as an attribute modifier on the server, which syncs
+                    the slower value to the client. With this option the modifier is removed locally
+                    every tick, so you move at full speed.
+                    <br><br>
+                    The server keeps its own copy of the modifier. Vanilla movement checks are far
+                    more tolerant than a 15% difference, but a server with a custom anti-cheat that
+                    compares your movement against its attributes can still notice the mismatch.
+                    Sprinting is recomputed from your input every tick, so it is not affected either
+                    way.
+                </div>
+            </div>
+        </fieldset>
+    </div>
+</div>

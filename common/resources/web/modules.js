@@ -325,6 +325,27 @@ module({
     path: 'aim-assist',
     tags: ['aim', 'bow', 'assist']
 });
+module({
+    group: 'hacks',
+    name: 'TacZ Aim Assist',
+    component: 'TaczAimAssist',
+    path: 'tacz-aim-assist',
+    tags: ['aim', 'tacz', 'gun', 'ballistics', 'assist']
+});
+module({
+    group: 'hacks',
+    name: 'TacZ No Recoil',
+    component: 'TaczNoRecoil',
+    path: 'tacz-no-recoil',
+    tags: ['tacz', 'gun', 'recoil', 'no recoil', 'spray']
+});
+module({
+    group: 'hacks',
+    name: 'TacZ Always Aim',
+    component: 'TaczAlwaysAim',
+    path: 'tacz-always-aim',
+    tags: ['tacz', 'gun', 'aim', 'ads', 'accuracy', 'spread', 'inaccuracy']
+});
 
 // Visuals Modules ==========================
 

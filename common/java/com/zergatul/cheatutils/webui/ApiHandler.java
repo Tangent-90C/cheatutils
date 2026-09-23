@@ -838,6 +838,42 @@ public class ApiHandler implements HttpHandler {
                 ConfigStore.instance.getConfig().aimAssist = config;
             }
         });
+
+        apis.add(new SimpleConfigApi<>("tacz-aim-assist", TaczAimAssistConfig.class) {
+            @Override
+            protected TaczAimAssistConfig getConfig() {
+                return ConfigStore.instance.getConfig().taczAimAssist;
+            }
+
+            @Override
+            protected void setConfig(TaczAimAssistConfig config) {
+                ConfigStore.instance.getConfig().taczAimAssist = config;
+            }
+        });
+
+        apis.add(new SimpleConfigApi<>("tacz-no-recoil", TaczNoRecoilConfig.class) {
+            @Override
+            protected TaczNoRecoilConfig getConfig() {
+                return ConfigStore.instance.getConfig().taczNoRecoil;
+            }
+
+            @Override
+            protected void setConfig(TaczNoRecoilConfig config) {
+                ConfigStore.instance.getConfig().taczNoRecoil = config;
+            }
+        });
+
+        apis.add(new SimpleConfigApi<>("tacz-always-aim", TaczAlwaysAimConfig.class) {
+            @Override
+            protected TaczAlwaysAimConfig getConfig() {
+                return ConfigStore.instance.getConfig().taczAlwaysAim;
+            }
+
+            @Override
+            protected void setConfig(TaczAlwaysAimConfig config) {
+                ConfigStore.instance.getConfig().taczAlwaysAim = config;
+            }
+        });
     }
 
     ApiHandler(List<ApiBase> apis) {

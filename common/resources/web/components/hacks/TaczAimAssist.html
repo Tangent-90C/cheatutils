@@ -1,0 +1,282 @@
+<div class="module-main" v-if="config">
+    <div class="description">
+        Aims at configured entities while holding a TaCZ (Timeless and Classics Zero) gun, with bullet drop
+        compensation from local gun packs, learned calibration data, or a manual bullet speed.
+    </div>
+
+    <div class="module-sections">
+        <div>
+            <switch-checkbox v-model="config.enabled" @change="update()">Enabled</switch-checkbox>
+        </div>
+
+        <fieldset>
+            <legend>Target Entities</legend>
+            <div class="section-description">
+                Aim Assist only targets enabled entity types. Groups cover whole categories at once
+                (Mob = hostile mobs, Creature = animals, and so on) - every entity belongs to exactly one group.
+            </div>
+            <div>
+                <button class="action" @click="openAddEntities()">Add Entity Type</button>
+                <button class="action" @click="openAddGroups()">Add Group</button>
+            </div>
+            <ul class="list-base margin-vertical">
+                <li v-for="(entry, index) in config.targetEntities" :key="entry.id">
+                    <switch-checkbox v-model="entry.enabled" @change="update()">Enabled</switch-checkbox>
+                    <button class="action" @click="removeTargetEntity(index)">Remove</button>
+                    <div>{{ entry.id }}</div>
+                </li>
+            </ul>
+            <div v-if="entityState == 'add'">
+                <div class="search">
+                    <button class="action" @click="entityState = 'list'">Back</button>
+                    <div>Filter:</div>
+                    <input type="text" class="search" v-model="entitySearch" @input="filterEntities()">
+                </div>
+                <ul class="list-base margin-vertical">
+                    <li v-for="id in entityFiltered" :key="id">
+                        <button class="action" @click="addTargetEntity(id)">Add</button>
+                        <div>{{ id }}</div>
+                    </li>
+                </ul>
+            </div>
+            <div v-if="entityState == 'addGroup'">
+                <div class="search">
+                    <button class="action" @click="entityState = 'list'">Back</button>
+                </div>
+                <ul class="list-base margin-vertical">
+                    <li v-for="group in groupLabels" :key="group.id">
+                        <button class="action" @click="addTargetEntity(group.id)">Add</button>
+                        <div>{{ group.name }} <span class="smaller">{{ group.id }}</span></div>
+                    </li>
+                </ul>
+            </div>
+            <div class="section-description">
+                The current target is shown in the Calibration HUD and can be read from scripts:
+                <CodeBlock :code='`
+                    if (taczAimAssist.hasBowAssistTarget()) {
+                        let id = taczAimAssist.getBowAssistEntityId();
+                        overlay.addAtPosition(
+                            window.getGuiWidth() / 2 + 16,
+                            window.getGuiHeight() / 2 + 16,
+                            "#FFFFFF",
+                            "Target: " + game.entities.getName(id));
+                    }
+                `' />
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Penetrable Blocks</legend>
+            <div class="section-description">
+                Enabled blocks here don't block line of sight and don't stop the drawn trajectory,
+                so targets behind leaves, glass, iron bars and similar blocks can still be aimed at.
+                Uncheck an entry to keep it listed without letting bullets through.
+            </div>
+            <div>
+                <button class="action" @click="openAddBlocks()">Add Block</button>
+            </div>
+            <ul class="list-base margin-vertical">
+                <li v-for="(entry, index) in config.penetrableBlocks" :key="entry.block">
+                    <switch-checkbox v-model="entry.enabled" @change="update()">Enabled</switch-checkbox>
+                    <button class="action" @click="removePenetrableBlock(index)">Remove</button>
+                    <div>{{ blockName(entry.block) }} <span class="smaller">{{ entry.block }}</span></div>
+                </li>
+            </ul>
+            <div v-if="blockState == 'add'">
+                <div class="search">
+                    <button class="action" @click="blockState = 'list'">Back</button>
+                    <div>Filter:</div>
+                    <input type="text" class="search" v-model="blockSearch" @input="filterBlocks()">
+                </div>
+                <ul class="list-base margin-vertical">
+                    <li v-for="id in blockFiltered" :key="id">
+                        <button class="action" @click="addPenetrableBlock(id)">Add</button>
+                        <div>{{ blockName(id) }} <span class="smaller">{{ id }}</span></div>
+                    </li>
+                </ul>
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Target Lock</legend>
+            <div class="section-description">
+                While the lock is on, the module rotates your view onto the current target and cancels mouse input.
+                Scripts can toggle the lock at runtime, for example to release the mouse while a screen is open:
+                <CodeBlock :code='`
+                    events.onHandleKeys(() => {
+                        if (input.isAltDown()) {
+                            taczAimAssist.disableTargetLock();
+                        } else {
+                            taczAimAssist.enableTargetLock();
+                        }
+                    });
+                `' />
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Aim Settings</legend>
+            <div class="flex-row">
+                <span class="field-description">Range:</span>
+                <input type="number" min="1" max="256" step="1" class="w3" v-model="config.range" @change="update()">
+            </div>
+            <div class="flex-row">
+                <span class="field-description">FOV:</span>
+                <input type="number" min="30" max="360" step="10" class="w3" v-model="config.fov" @change="update()">
+            </div>
+            <div class="section-description">
+                Maximum angle, in degrees, between your crosshair and a target for it to be considered.
+            </div>
+            <div style="padding-top: 0.5em;">
+                <div>
+                    <radio name="tacz-aim-at" :value="'AIM_ASSIST_CENTER'" v-model="config.aimAtMode" @change="update()">Target Center</radio>
+                </div>
+                <div>
+                    <radio name="tacz-aim-at" :value="'AIM_ASSIST_HEAD'" v-model="config.aimAtMode" @change="update()">Target Top</radio>
+                </div>
+            </div>
+            <div style="padding-top: 0.5em;">
+                <div>
+                    <radio name="tacz-target-priority" :value="'CROSSHAIR'" v-model="config.targetPriority" @change="update()">Prioritize Target Closest To Crosshair</radio>
+                </div>
+                <div>
+                    <radio name="tacz-target-priority" :value="'DISTANCE'" v-model="config.targetPriority" @change="update()">Prioritize Target Closest To Player</radio>
+                </div>
+            </div>
+            <div>
+                <switch-checkbox v-model="config.checkLineOfSight" @change="update()">Check Line Of Sight</switch-checkbox>
+            </div>
+            <div>
+                <switch-checkbox v-model="config.switchTargets" @change="update()">Switch Targets</switch-checkbox>
+                <div class="section-description">
+                    Continuously switches to the highest-priority valid target.
+                    When disabled, keeps the current target until it becomes invalid.
+                </div>
+            </div>
+            <div>
+                <switch-checkbox v-model="config.onlyAimWithGuns" @change="update()">Only Aim With Guns</switch-checkbox>
+                <div class="section-description">
+                    Only aims while the main-hand item is recognized as a TaCZ gun.
+                </div>
+            </div>
+            <div>
+                <switch-checkbox v-model="config.syncShootOrigin" @change="update()">Sync Shoot Origin In The Air</switch-checkbox>
+                <div class="section-description">
+                    TaCZ spawns bullets from the position the gun was drawn at, and only refreshes
+                    that origin when a gun is drawn. After flying, falling or travelling far the
+                    bullets keep spawning from the old spot, so every shot misses no matter how
+                    well you aim. With this option on, flying more than 2 blocks from the last
+                    synced position re-sends a draw to the server, which re-snapshots the origin
+                    at your current position.
+                    <br><br>
+                    Each sync costs the gun's put-away time (about 0.43s for the default SCAR-L)
+                    before the next shot goes through, so syncing happens while you reposition -
+                    at most once per 1.5 seconds - and never while you are holding fire. Hover in
+                    place after a reposition and shots keep flying uninterrupted and on target.
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Movement Prediction</legend>
+            <div>
+                <switch-checkbox v-model="config.predictMovement" @change="update()">Movement Prediction</switch-checkbox>
+                <div class="section-description">
+                    Leads moving targets. Bullet drop compensation from local, learned, or
+                    manual ballistic data remains active while this is disabled.
+                </div>
+            </div>
+            <div class="flex-row" v-if="config.predictMovement">
+                <span class="field-description">Prediction Time:</span>
+                <input type="number" min="0" max="5" step="0.01" class="w3" v-model="config.predictionTime" @change="update()">
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>
+                <switch-checkbox v-model="config.automaticCalibration" @change="update()">Automatic Bullet Calibration</switch-checkbox>
+            </legend>
+            <div class="section-description">
+                Learns the current TaCZ weapon's muzzle speed, drag, and gravity from your own
+                bullet trajectories. Uses the manual Bullet speed while warming up.
+            </div>
+            <div v-if="config.automaticCalibration">
+                <switch-checkbox v-model="config.useLocalGunData" @change="update()">Use Local Gun Data</switch-checkbox>
+                <div class="section-description">
+                    Reads installed TaCZ gun packs from the game's <b>tacz</b> folder and from
+                    <b>mods</b> jars (TaCZ ships its default gun pack inside its own mod jar).
+                    Local data takes priority over learned data.
+                </div>
+                <switch-checkbox v-model="config.calibrationHud" @change="update()">Calibration HUD</switch-checkbox>
+                <div class="section-description">
+                    Shows the current weapon, effective ballistic parameters, sample count, and
+                    calibration state on screen.
+                </div>
+                <switch-checkbox v-model="config.debugLogging" @change="update()">Debug Logging</switch-checkbox>
+                <div class="section-description">
+                    Logs calibration decisions to the game log. Very verbose.
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Manual Fallback</legend>
+            <div class="section-description">
+                These values are only used when automatic calibration is disabled or has not
+                collected enough samples yet. Set bullet speed to 0 for hitscan weapons.
+            </div>
+            <div class="flex-row">
+                <span class="field-description">Bullet Speed:</span>
+                <input type="number" min="0" max="5000" step="1" class="w4" v-model="config.bulletSpeed" @change="update()">
+            </div>
+            <div class="section-description">
+                Manual projectile speed in blocks per second. 0 disables the fallback.
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Ballistic Solver</legend>
+            <div class="section-description">
+                Shared limits and advanced parameters used by trajectory prediction.
+            </div>
+            <div class="flex-row">
+                <span class="field-description">Max Flight Time:</span>
+                <input type="number" min="0.1" max="10" step="0.1" class="w3" v-model="config.maxFlightTime" @change="update()">
+            </div>
+            <div class="section-description">
+                Maximum time, in seconds, searched for a valid ballistic intercept.
+                Targets with no verified solution in this time are ignored.
+            </div>
+            <div class="flex-row">
+                <span class="field-description">Miss Radius:</span>
+                <input type="number" min="0.05" max="3" step="0.05" class="w3" v-model="config.allowedMissRadius" @change="update()">
+            </div>
+            <div class="section-description">
+                Maximum closest-distance error, in blocks, allowed by the discrete trajectory verification.
+            </div>
+            <div class="flex-row">
+                <span class="field-description">Velocity Inheritance:</span>
+                <input type="number" min="0" max="2" step="0.01" class="w3" v-model="config.shooterVelocityInheritance" @change="update()">
+            </div>
+            <div class="section-description">
+                Fraction of your own world velocity inherited by the bullet. Leave at 0 until measured for the current server.
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>
+                <switch-checkbox v-model="config.taczTrajectory" @change="update()">TaCZ Trajectory</switch-checkbox>
+            </legend>
+            <div class="section-description">
+                Draws the predicted bullet path of the gun in your main hand.
+            </div>
+            <div class="flex-row" v-if="config.taczTrajectory">
+                <span class="field-description">Max Speed:</span>
+                <input type="number" min="0" max="10000" step="1" class="w4" v-model="config.taczTrajectoryMaxSpeed" @change="update()">
+            </div>
+            <div class="section-description" v-if="config.taczTrajectory">
+                Hides the trajectory for weapons faster than this many blocks per second. 0 shows it always.
+            </div>
+        </fieldset>
+    </div>
+</div>

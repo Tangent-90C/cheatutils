@@ -65,6 +65,9 @@ public class Config implements Sanitizable {
     public CoreConfig coreConfig = new CoreConfig();
     public MonacoEditorConfig monacoEditor = new MonacoEditorConfig();
     public AimAssistConfig aimAssist = new AimAssistConfig();
+    public TaczAimAssistConfig taczAimAssist = new TaczAimAssistConfig();
+    public TaczNoRecoilConfig taczNoRecoil = new TaczNoRecoilConfig();
+    public TaczAlwaysAimConfig taczAlwaysAim = new TaczAlwaysAimConfig();
 
     public Config() {}
 
@@ -95,5 +98,6 @@ public class Config implements Sanitizable {
         areaMineConfig.sanitize();
         hitboxSizeConfig.sanitize();
         coreConfig.sanitize();
+        taczAimAssist.sanitize();
     }
 }

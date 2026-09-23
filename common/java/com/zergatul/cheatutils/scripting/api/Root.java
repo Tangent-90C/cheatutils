@@ -38,6 +38,7 @@ public class Root {
     public static HitboxSizeApi hitboxSize = new HitboxSizeApi();
     public static BedrockBreakerApi bedrockBreaker = new BedrockBreakerApi();
     public static AimAssistApi aimAssist = new AimAssistApi();
+    public static TaczAimAssistApi taczAimAssist = new TaczAimAssistApi();
 
     // visuals
     public static ArmorOverlayApi armorOverlay = new ArmorOverlayApi();

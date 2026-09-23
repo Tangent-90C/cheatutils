@@ -264,8 +264,39 @@ public class ConfigStore {
         migrateBlockEspConfigFields(root);
         migrateEntityEspConfigFields(root);
         migrateSchematicaConfigFields(root);
+        migrateTaczAimAssistConfigFields(root);
         root.remove("gameTickScriptingConfig");
         root.remove("autoDisconnectConfig");
+    }
+
+    private static void migrateTaczAimAssistConfigFields(JsonObject root) {
+        if (!root.has("taczAimAssist") || !root.get("taczAimAssist").isJsonObject()) {
+            return;
+        }
+
+        JsonObject config = root.getAsJsonObject("taczAimAssist");
+        migrateTaczEntryList(config, "targetEntities", "id");
+        migrateTaczEntryList(config, "penetrableBlocks", "block");
+    }
+
+    private static void migrateTaczEntryList(JsonObject config, String key, String idField) {
+        if (!config.has(key) || !config.get(key).isJsonArray()) {
+            return;
+        }
+
+        JsonArray oldEntries = config.getAsJsonArray(key);
+        JsonArray newEntries = new JsonArray();
+        for (JsonElement element : oldEntries) {
+            if (element.isJsonPrimitive()) {
+                JsonObject entry = new JsonObject();
+                entry.addProperty(idField, element.getAsString());
+                entry.addProperty("enabled", true);
+                newEntries.add(entry);
+            } else {
+                newEntries.add(element);
+            }
+        }
+        config.add(key, newEntries);
     }
 
     private static void migrateBlockEspConfigFields(JsonObject root) {

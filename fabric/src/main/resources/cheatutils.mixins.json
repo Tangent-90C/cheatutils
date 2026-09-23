@@ -52,6 +52,7 @@
     "common.MixinGuiFreeCam",
     "common.MixinGuiGraphics",
     "common.MixinKeyBindingListKeyEntry",
+        "common.MixinKeyMapping",
     "common.MixinLevelRenderer",
     "common.MixinLivingEntity",
     "common.MixinLocalPlayer",

@@ -31,5 +31,24 @@
                 While flying this module overrides onGround flag in MovePlayerPacket. Both options works fine in vanilla. For Fast Break hack, Disable Fly Penalty option you need to set OnGround = true.
             </div>
         </fieldset>
+
+        <fieldset class="flex-column">
+            <legend>
+                TaCZ
+            </legend>
+            <div>
+                <switch-checkbox v-model="config.reportOnGroundWithGun" @change="update()">Report OnGround While Holding A TaCZ Gun</switch-checkbox>
+            </div>
+            <div class="section-description">
+                TaCZ refuses to fire while the server sees the player airborne and far from the
+                position the gun was drawn at, which is exactly what happens when flying.
+                With this option the onGround flag is reported as true whenever a TaCZ gun is
+                held, so the server skips that check and shots go through.
+                <br><br>
+                Only affects packets sent while holding a TaCZ gun. Saying "on ground" also
+                stops fall damage for as long as the gun is in hand, so hold something else
+                when you want fall damage back.
+            </div>
+        </fieldset>
     </div>
 </div>

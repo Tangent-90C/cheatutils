@@ -1,0 +1,29 @@
+<div class="module-main" v-if="config">
+    <div class="description">
+        Removes TaCZ gun recoil while a gun is held in the main hand.
+    </div>
+
+    <div class="module-sections">
+        <div>
+            <switch-checkbox v-model="config.enabled" @change="update()">Enabled</switch-checkbox>
+        </div>
+
+        <fieldset>
+            <legend>How It Works</legend>
+            <div class="section-description">
+                TaCZ applies recoil by writing the player's rotation once per frame while
+                following a time-based recoil curve, both as a camera kick and as a real
+                rotation change that the server sees. This module snapshots the rotation at
+                the start of every camera setup and restores it at the end of the same frame:
+                <ul>
+                    <li>the camera stays perfectly still while firing,</li>
+                    <li>the rotation sent to the server never contains the recoil, so bullets
+                        fly exactly where the crosshair points,</li>
+                    <li>it stays active while aiming down sights, and works together with
+                        <b>TacZ Aim Assist</b> (its aim is snapshotted, not reverted).</li>
+                </ul>
+                Only applies while the main-hand item is recognized as a TaCZ gun.
+            </div>
+        </fieldset>
+    </div>
+</div>
