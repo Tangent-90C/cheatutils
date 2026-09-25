@@ -1,0 +1,10 @@
+# build-local mod jars required only by the mixin annotation processor (see build.gradle)
+forge/libs/
+
+# gradle caches created in the repo root
+.gradle/
+
+# local tooling workspaces
+.video_agent/
+.zcode/
+.zcodeignore

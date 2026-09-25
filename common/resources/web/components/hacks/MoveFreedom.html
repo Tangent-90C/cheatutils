@@ -1,0 +1,22 @@
+<div class="module-main move-freedom" v-if="config">
+    <div class="description">
+        Cancels TaCZ medical movement penalties locally: fracture slows you down per injury layer, and carrying too much slows you down by up to 90%. With the matching switch on, you move at full speed while the status effect icons still show as usual.<br>
+        The penalties are cancelled only for your own movement simulation - nothing is sent to the server. Turning a switch off takes effect on the next tick, the game re-applies the penalty by itself.
+    </div>
+
+    <div class="module-sections">
+        <fieldset class="items">
+            <legend>
+                <switch-checkbox v-model="config.enabled" @change="update()">Enabled</switch-checkbox>
+            </legend>
+
+            <switch-checkbox v-model="config.ignoreFracture" @change="update()" title="Cancels the TACZ Fracture Speed Penalty attribute modifier">
+                Fracture does not slow down movement
+            </switch-checkbox>
+
+            <switch-checkbox v-model="config.ignoreOverweight" @change="update()" title="Cancels the TACZ Overburden Speed Penalty attribute modifier (both the -50% and the -90% tiers)">
+                Overweight does not slow down movement
+            </switch-checkbox>
+        </fieldset>
+    </div>
+</div>

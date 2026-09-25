@@ -101,6 +101,13 @@ dependencies {
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
     annotationProcessor files(customMixinAnnotationProcessor)
 
+    // TaCZ is kept off the runtime classpath, but the mixin annotation processor needs to
+    // resolve the string-target mixin into com.tacz classes at compile time.
+    compileOnly files('libs/TaCZ-1.1.84.jar')
+    // Same for the ParCool mixin (com.alrex.parcool.compat.TaczOverburdenCompat).
+    compileOnly files('libs/ParCool-3.4.3.3.jar')
+
+
     compileOnly("org.jspecify:jspecify:1.0.0")
 }
 

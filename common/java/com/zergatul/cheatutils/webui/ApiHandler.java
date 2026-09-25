@@ -641,6 +641,30 @@ public class ApiHandler implements HttpHandler {
             }
         });
 
+        apis.add(new SimpleConfigApi<>("shooter-esp", ShooterEspConfig.class) {
+            @Override
+            protected ShooterEspConfig getConfig() {
+                return ConfigStore.instance.getConfig().shooterEspConfig;
+            }
+
+            @Override
+            protected void setConfig(ShooterEspConfig config) {
+                ConfigStore.instance.getConfig().shooterEspConfig = config;
+            }
+        });
+
+        apis.add(new SimpleConfigApi<>("move-freedom", MoveFreedomConfig.class) {
+            @Override
+            protected MoveFreedomConfig getConfig() {
+                return ConfigStore.instance.getConfig().moveFreedomConfig;
+            }
+
+            @Override
+            protected void setConfig(MoveFreedomConfig config) {
+                ConfigStore.instance.getConfig().moveFreedomConfig = config;
+            }
+        });
+
         apis.add(new SimpleConfigApi<>("auto-drop", AutoDropConfig.class) {
             @Override
             protected AutoDropConfig getConfig() {

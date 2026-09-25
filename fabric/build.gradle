@@ -46,6 +46,13 @@ dependencies {
 
     compileOnly("org.jspecify:jspecify:1.0.0")
 
+    // TaCZ is kept off the runtime classpath, but the mixin annotation processor needs to
+    // resolve the string-target mixin into com.tacz classes at compile time. Same jar as
+    // forge/libs, hard-linked to avoid a second 265MB copy.
+    compileOnly files('../forge/libs/TaCZ-1.1.84.jar')
+    compileOnly files('../forge/libs/ParCool-3.4.3.3.jar')
+
+
     testImplementation platform('org.junit:junit-bom:5.10.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

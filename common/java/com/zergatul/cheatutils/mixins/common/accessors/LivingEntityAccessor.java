@@ -18,4 +18,10 @@ public interface LivingEntityAccessor {
 
     @Accessor("swimAmountO")
     void setSwimAmount0_CU(float value);
+
+    @Accessor("jumping")
+    boolean getJumping_CU();
+
+    @Accessor("noJumpDelay")
+    int getNoJumpDelay_CU();
 }

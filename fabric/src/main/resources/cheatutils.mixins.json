@@ -7,6 +7,7 @@
   "mixinPriority": 500,
   "client": [
     "common.accessors.AbstractContainerScreenAccessor",
+    "common.accessors.AbstractSoundInstanceAccessor",
     "common.accessors.ClientLevelAccessor",
     "common.accessors.ClientPacketListenerAccessor",
     "common.accessors.CompositeStateAccessor",
@@ -15,6 +16,7 @@
     "common.accessors.ConnectionAccessor",
     "common.accessors.CraftingScreenAccessor",
     "common.accessors.EntityTypeAccessor",
+    "common.accessors.EntityBoundSoundInstanceAccessor",
     "common.accessors.GuiAccessor",
     "common.accessors.HeightmapAccessor",
     "common.accessors.InputConstantsKeyAccessor",
@@ -28,10 +30,8 @@
     "common.accessors.ScreenAccessor",
     "common.accessors.TextureStateShardAccessor",
     "common.accessors.WalkAnimationStateAccessor",
-
     "common.schematica.MixinRenderChunkRegion",
     "common.schematica.MixinRenderRegionCache",
-
     "common.MixinAbstractContainerScreen",
     "common.MixinBlockBehaviourBlockStateBase",
     "common.MixinBoat",
@@ -52,7 +52,7 @@
     "common.MixinGuiFreeCam",
     "common.MixinGuiGraphics",
     "common.MixinKeyBindingListKeyEntry",
-        "common.MixinKeyMapping",
+    "common.MixinKeyMapping",
     "common.MixinLevelRenderer",
     "common.MixinLivingEntity",
     "common.MixinLocalPlayer",
@@ -70,10 +70,11 @@
     "common.MixinSlimeBlock",
     "common.MixinSoundManager",
     "common.MixinUser",
-
     "common.compatibility.iris.MixinHandRenderer",
     "common.compatibility.iris.MixinOuterWrappedRenderType",
-
+    "common.compatibility.tacz.MixinMedicalEffectHelper",
+    "common.compatibility.tacz.MixinTaczOverburdenCompat",
+    "common.compatibility.tacz.MixinTaczParCoolCompat",
     "fabric.MixinAbstractContainerScreen",
     "fabric.MixinGameRenderer",
     "fabric.MixinGui",

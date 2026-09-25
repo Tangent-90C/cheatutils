@@ -1,5 +1,6 @@
 package com.zergatul.cheatutils.mixins.common;
 
+import com.zergatul.cheatutils.modules.esp.ShooterEsp;
 import com.zergatul.cheatutils.modules.hacks.ElytraFly;
 import net.minecraft.client.resources.sounds.ElytraOnPlayerSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
@@ -19,5 +20,6 @@ public abstract class MixinSoundManager {
                 info.cancel();
             }
         }
+        ShooterEsp.instance.onSound(sound);
     }
 }

@@ -6,6 +6,7 @@ import com.zergatul.cheatutils.common.events.GatherTooltipComponentsEvent;
 import com.zergatul.cheatutils.common.events.PreRenderGuiOverlayEvent;
 import com.zergatul.cheatutils.common.events.RenderGuiEvent;
 import com.zergatul.cheatutils.common.events.RenderWorldLastEvent;
+import com.zergatul.cheatutils.modules.hacks.MoveFreedom;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraftforge.client.event.RenderGuiOverlayEvent;
@@ -67,5 +68,15 @@ public class ForgeEvents {
             RawChunkUnloaded.trigger((LevelChunk) event.getChunk());
             ChunkUnloaded.trigger();
         }
+    }
+
+    @SubscribeEvent(priority = net.minecraftforge.eventbus.api.EventPriority.LOWEST)
+    public void onMovementInputUpdate(net.minecraftforge.client.event.MovementInputUpdateEvent event) {
+        MoveFreedom.instance.onMovementInput(event.getEntity(), event.getInput());
+    }
+
+    @SubscribeEvent(priority = net.minecraftforge.eventbus.api.EventPriority.LOWEST)
+    public void onLivingTick(net.minecraftforge.event.entity.living.LivingEvent.LivingTickEvent event) {
+        MoveFreedom.instance.onLivingTick(event.getEntity());
     }
 }

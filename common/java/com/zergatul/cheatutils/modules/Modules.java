@@ -40,6 +40,7 @@ public class Modules {
         register(AutoCraft.instance);
         register(BlockEsp.instance);
         register(EntityEsp.instance);
+        register(ShooterEsp.instance);
         register(ProjectilePath.instance);
         register(EndCityChunks.instance);
         register(EventsScripting.instance);
@@ -78,6 +79,7 @@ public class Modules {
         register(TaczAimAssist.instance);
         register(TaczNoRecoil.instance);
         register(TaczAlwaysAim.instance);
+        register(MoveFreedom.instance);
 
         register(ClientTickEndExecutor.instance);
         register(InGameTickEndExecutor.instance);

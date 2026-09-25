@@ -126,6 +126,22 @@ module({
     tags: ['entity', 'entities', 'esp']
 });
 module({
+    group: 'hacks',
+    name: 'Move Freedom',
+    component: 'MoveFreedom',
+    statusKey: 'MoveFreedom',
+    path: 'move-freedom',
+    tags: ['fracture', 'overweight', 'overburden', 'move', 'speed', 'tacz', 'medical']
+});
+module({
+    group: 'esp',
+    name: 'Shooter ESP',
+    component: 'ShooterESP',
+    statusKey: 'ShooterEsp',
+    path: 'shooter-esp',
+    tags: ['shooter', 'sound', 'tacz', 'gun', 'esp']
+});
+module({
     group: 'esp',
     name: 'Projectile Path',
     component: 'ProjectilePath',

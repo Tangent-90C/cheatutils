@@ -49,6 +49,8 @@ public class Config implements Sanitizable {
     public SchematicaConfig schematicaConfig = new SchematicaConfig();
     public PerformanceConfig performanceConfig = new PerformanceConfig();
     public EntityTitleConfig entityTitleConfig = new EntityTitleConfig();
+    public ShooterEspConfig shooterEspConfig = new ShooterEspConfig();
+    public MoveFreedomConfig moveFreedomConfig = new MoveFreedomConfig();
     public BlockAutomationConfig blockAutomationConfig = new BlockAutomationConfig();
     public BobHurtConfig bobHurtConfig = new BobHurtConfig();
     public AutoAttackConfig autoAttackConfig = new AutoAttackConfig();
@@ -89,6 +91,7 @@ public class Config implements Sanitizable {
         autoBucketConfig.sanitize();
         performanceConfig.sanitize();
         entityTitleConfig.sanitize();
+        shooterEspConfig.sanitize();
         keyBindingsConfig.sanitize();
         worldMarkersConfig.sanitize();
         autoAttackConfig.sanitize();

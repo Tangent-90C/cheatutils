@@ -6,6 +6,7 @@ import com.zergatul.cheatutils.common.events.RenderWorldLastEvent;
 import com.zergatul.cheatutils.configs.ConfigStore;
 import com.zergatul.cheatutils.entities.FakePlayer;
 import com.zergatul.cheatutils.helpers.MixinLevelRendererHelper;
+import com.zergatul.cheatutils.render.RenderedEntityTracker;
 import com.zergatul.cheatutils.modules.esp.FreeCam;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
@@ -102,6 +103,12 @@ public abstract class MixinLevelRenderer {
     @Inject(at = @At("HEAD"), method = "renderEntity")
     private void onBeforeRenderEntity(Entity entity, double x, double y, double z, float partialTicks, PoseStack poseStack, MultiBufferSource bufferSource, CallbackInfo info) {
         MixinLevelRendererHelper.currentEntity = entity;
+        RenderedEntityTracker.markRendered(entity.getId());
+    }
+
+    @Inject(at = @At("HEAD"), method = "renderLevel(Lcom/mojang/blaze3d/vertex/PoseStack;FJZLnet/minecraft/client/Camera;Lnet/minecraft/client/renderer/GameRenderer;Lnet/minecraft/client/renderer/LightTexture;Lorg/joml/Matrix4f;)V")
+    private void onRenderLevelStart(CallbackInfo info) {
+        RenderedEntityTracker.beginFrame();
     }
 
     @Inject(at = @At("TAIL"), method = "renderEntity")

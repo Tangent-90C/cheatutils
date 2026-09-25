@@ -1,0 +1,113 @@
+<div class="module-main shooter-esp" v-if="config">
+    <div class="description">
+        Boxes players who fired a TaCZ gun while the game was not drawing them.<br>
+        A shot is audible whenever the shooter is inside the server tracking range, which is a purely horizontal test - it ignores terrain and chunk state. Rendering additionally requires the entity to be inside the vanilla entity render distance (~128 blocks for a player) and to survive the view frustum and occlusion culling. Shooters that are audible but invisible sit in that gap, and this module boxes them at their real position.<br>
+        TaCZ has to be installed for the module to see anything.
+    </div>
+
+    <div class="module-sections">
+        <fieldset class="items">
+            <legend>
+                <switch-checkbox v-model="config.enabled" @change="update()">Enabled</switch-checkbox>
+            </legend>
+            <div class="flex-row">
+                <span class="field-description">Max Distance:</span>
+                <input type="text" class="w5" v-model="config.maxDistance" @change="update()">
+                <span class="input-description">In blocks, measured from the player to the shooter.</span>
+            </div>
+            <div class="flex-row">
+                <span class="field-description">Display Time:</span>
+                <input type="text" class="w5" v-model="config.displayMillis" @change="update()">
+                <span class="input-description">In milliseconds, how long a box stays after the shot was heard.</span>
+            </div>
+        </fieldset>
+
+        <fieldset class="items">
+            <legend>
+                Shooters the game did not render
+            </legend>
+            <div class="section-description">
+                The cases this module exists for: audible through the game's own render cut.
+            </div>
+
+            <div class="group-setting">
+                <switch-checkbox v-model="config.drawBoundingBox" @change="update()">
+                    Bounding Box
+                </switch-checkbox>
+                <color-picker
+                    v-model="config.boundingBoxColor"
+                    @update:model-value="update()" />
+                <div class="flex-row">
+                    <span class="field-description">Line Width:</span>
+                    <input type="number" min="0.5" max="100" step="0.1" class="w5" v-model="config.boundingBoxWidth" @change="update()">
+                </div>
+            </div>
+
+            <div class="group-setting">
+                <switch-checkbox v-model="config.drawTracers" @change="update()">
+                    Tracers
+                </switch-checkbox>
+                <color-picker
+                    v-model="config.tracerColor"
+                    @update:model-value="update()" />
+                <div class="flex-row">
+                    <span class="field-description">Line Width:</span>
+                    <input type="number" min="0.5" max="100" step="0.1" class="w5" v-model="config.tracerWidth" @change="update()">
+                </div>
+            </div>
+
+            <div class="group-setting">
+                <switch-checkbox v-model="config.drawLabels" @change="update()">
+                    Labels
+                </switch-checkbox>
+                <color-picker
+                    v-model="config.labelColor"
+                    @update:model-value="update()" />
+                <div class="section-description">
+                    Shows shooter name, distance, gun sound file and the server-side sound range inferred from the played volume.
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset class="items">
+            <legend>
+                Shooters the game did render
+            </legend>
+            <div class="section-description">
+                Only used when the filter below is off, so the two states never share a color. Default filter on means you will not see these.
+            </div>
+
+            <div class="group-setting">
+                <span class="field-description">Bounding Box:</span>
+                <color-picker
+                    v-model="config.visibleBoundingBoxColor"
+                    @update:model-value="update()" />
+                <div class="flex-row">
+                    <span class="field-description">Line Width:</span>
+                    <input type="number" min="0.5" max="100" step="0.1" class="w5" v-model="config.visibleBoundingBoxWidth" @change="update()">
+                </div>
+            </div>
+
+            <div class="group-setting">
+                <span class="field-description">Tracers:</span>
+                <color-picker
+                    v-model="config.visibleTracerColor"
+                    @update:model-value="update()" />
+                <div class="flex-row">
+                    <span class="field-description">Line Width:</span>
+                    <input type="number" min="0.5" max="100" step="0.1" class="w5" v-model="config.visibleTracerWidth" @change="update()">
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset class="items">
+            <legend>Filtering</legend>
+            <switch-checkbox v-model="config.onlyNotRendered" @change="update()" title="When on, shooters the game drew this frame are skipped, so only invisible ones get a box">
+                Only shooters the game did not render
+            </switch-checkbox>
+            <div class="section-description">
+                With this on, the only boxes you see come from the invisible-shooter colors above.
+            </div>
+        </fieldset>
+    </div>
+</div>

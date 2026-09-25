@@ -2,7 +2,9 @@ package com.zergatul.cheatutils.mixins.common;
 
 import com.zergatul.cheatutils.configs.ConfigStore;
 import com.zergatul.cheatutils.modules.hacks.ElytraFly;
+import com.zergatul.cheatutils.modules.hacks.MoveFreedom;
 import com.zergatul.cheatutils.modules.visuals.FullBright;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
@@ -34,6 +36,20 @@ public abstract class MixinLivingEntity {
                 info.setReturnValue(new MobEffectInstance(MobEffects.NIGHT_VISION, 1000));
                 info.cancel();
             }
+        }
+    }
+
+    @Inject(at = @At("HEAD"), method = "travel(Lnet/minecraft/world/phys/Vec3;)V")
+    private void onTravel(Vec3 travelVector, CallbackInfo info) {
+        if ((Object) this instanceof LocalPlayer player) {
+            MoveFreedom.instance.onTravel(player);
+        }
+    }
+
+    @Inject(at = @At("TAIL"), method = "jumpFromGround()V")
+    private void onJumpFromGround(CallbackInfo info) {
+        if ((Object) this instanceof LocalPlayer player) {
+            MoveFreedom.instance.traceJumpExecuted(player);
         }
     }
 }
