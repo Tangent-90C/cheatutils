@@ -1,5 +1,6 @@
 package com.zergatul.cheatutils.mixins.common;
 
+import com.zergatul.cheatutils.modules.esp.SoundEsp;
 import com.zergatul.cheatutils.modules.hacks.ElytraFly;
 import net.minecraft.client.resources.sounds.ElytraOnPlayerSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
@@ -16,6 +17,7 @@ public abstract class MixinSoundManager {
 
     @Inject(at = @At("HEAD"), method = "play", cancellable = true)
     private void onPlay(SoundInstance sound, CallbackInfoReturnable<SoundEngine.PlayResult> info) {
+        SoundEsp.instance.onSoundInstance(sound);
         if (sound instanceof ElytraOnPlayerSoundInstance) {
             if (!ElytraFly.instance.shouldPlaySound()) {
                 info.cancel();

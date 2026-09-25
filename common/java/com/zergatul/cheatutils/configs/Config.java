@@ -12,6 +12,7 @@ public class Config {
     public BoatHackConfig boatHackConfig = new BoatHackConfig();
     public ShulkerTooltipConfig shulkerTooltipConfig = new ShulkerTooltipConfig();
     public ProjectilePathConfig projectilePathConfig = new ProjectilePathConfig();
+    public SoundEspConfig soundEspConfig = new SoundEspConfig();
     public ElytraHackConfig elytraHackConfig = new ElytraHackConfig();
     public PigHackConfig pigHackConfig = new PigHackConfig();
     public EndCityChunksConfig endCityChunksConfig = new EndCityChunksConfig();

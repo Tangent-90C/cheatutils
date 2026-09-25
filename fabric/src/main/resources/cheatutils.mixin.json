@@ -18,6 +18,7 @@
     "common.accessors.CompositeRenderTypeAccessor",
     "common.accessors.CompositeStateAccessor",
     "common.accessors.CrossbowItemAccessor",
+    "common.accessors.EntityBoundSoundInstanceAccessor",
     "common.accessors.EntityTypeAccessor",
     "common.accessors.FogRendererAccessor",
     "common.accessors.GuiAccessor",

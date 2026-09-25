@@ -129,6 +129,7 @@ public class ConfigStore {
         config.explorationMiniMapConfig.validate();
         config.reachConfig.validate();
         config.lightLevelConfig.validate();
+        config.soundEspConfig.validate();
         config.schematicaConfig.validate();
         config.autoBucketConfig.validate();
         config.performanceConfig.validate();

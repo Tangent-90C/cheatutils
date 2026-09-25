@@ -37,6 +37,7 @@ public class Modules {
         register(BlockEsp.instance);
         register(EntityEsp.instance);
         register(ProjectilePath.instance);
+        register(SoundEsp.instance);
         register(EndCityChunks.instance);
         register(AutoBucket.instance);
         register(WorldDownloadController.instance);

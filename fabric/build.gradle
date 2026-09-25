@@ -44,6 +44,11 @@ dependencies {
     // modImplementation "net.fabricmc.fabric-api:fabric-api-deprecated:${project.fabric_version}"
 
     annotationProcessor files('../mixin-plugin/annotation-processor/build/libs/annotation-processor.jar')
+
+    // jspecify annotations come from java-scripting-language sources which are
+    // compiled directly into this project (srcDir), so its own build.gradle.kts
+    // dependency declarations do not apply here.
+    compileOnly "org.jspecify:jspecify:1.0.0"
 }
 
 sourceSets {
