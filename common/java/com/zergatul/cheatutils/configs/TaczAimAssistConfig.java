@@ -12,6 +12,11 @@ public class TaczAimAssistConfig extends ModuleConfig implements Sanitizable {
     public static final String AIM_ASSIST_HEAD = "AIM_ASSIST_HEAD";
     public static final String TARGET_PRIORITY_CROSSHAIR = "CROSSHAIR";
     public static final String TARGET_PRIORITY_DISTANCE = "DISTANCE";
+    public static final String AUTO_FIRE_MODE_GUN = "GUN";
+    public static final String AUTO_FIRE_MODE_SINGLE = "SINGLE";
+    public static final String AUTO_FIRE_MODE_FULL = "FULL";
+    public static final String REPOSITION_TRIGGER_AUTO = "AUTO";
+    public static final String REPOSITION_TRIGGER_MANUAL = "MANUAL";
     public static final String GROUP_PREFIX = "group:";
 
     public ImmutableList<TargetEntityEntry> targetEntities;
@@ -36,6 +41,14 @@ public class TaczAimAssistConfig extends ModuleConfig implements Sanitizable {
     public double predictionTime;
     public boolean switchTargets;
     public boolean syncShootOrigin;
+    public boolean autoFire;
+    public String autoFireMode;
+    public boolean autoPenetrableBlocks;
+    public boolean treatGlassAsPassable;
+    public boolean teleportReposition;
+    public String teleportRepositionTrigger;
+    public double teleportRepositionRange;
+    public int teleportRepositionRepeats;
     public boolean debugLogging;
 
     public TaczAimAssistConfig() {
@@ -59,6 +72,14 @@ public class TaczAimAssistConfig extends ModuleConfig implements Sanitizable {
         predictionTime = 0.2;
         switchTargets = false;
         syncShootOrigin = true;
+        autoFire = false;
+        autoFireMode = AUTO_FIRE_MODE_GUN;
+        autoPenetrableBlocks = true;
+        treatGlassAsPassable = true;
+        teleportReposition = false;
+        teleportRepositionTrigger = REPOSITION_TRIGGER_AUTO;
+        teleportRepositionRange = 24;
+        teleportRepositionRepeats = 5;
         debugLogging = false;
     }
 
@@ -100,11 +121,19 @@ public class TaczAimAssistConfig extends ModuleConfig implements Sanitizable {
         range = MathUtils.clamp(range, 1, 256);
         fov = MathUtils.clamp(fov, 30, 360);
         predictionTime = MathUtils.clamp(predictionTime, 0, 5);
+        teleportRepositionRange = MathUtils.clamp(teleportRepositionRange, 4, 64);
+        teleportRepositionRepeats = MathUtils.clamp(teleportRepositionRepeats, 0, 100);
         if (!AIM_ASSIST_HEAD.equals(aimAtMode)) {
             aimAtMode = AIM_ASSIST_CENTER;
         }
         if (!TARGET_PRIORITY_DISTANCE.equals(targetPriority)) {
             targetPriority = TARGET_PRIORITY_CROSSHAIR;
+        }
+        if (!AUTO_FIRE_MODE_SINGLE.equals(autoFireMode) && !AUTO_FIRE_MODE_FULL.equals(autoFireMode)) {
+            autoFireMode = AUTO_FIRE_MODE_GUN;
+        }
+        if (!REPOSITION_TRIGGER_MANUAL.equals(teleportRepositionTrigger)) {
+            teleportRepositionTrigger = REPOSITION_TRIGGER_AUTO;
         }
     }
 

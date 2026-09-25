@@ -15,6 +15,15 @@ public class TeleportApi {
     }
 
     @ApiVisibility(ApiType.ACTION)
+    public boolean toPosition(double x, double y, double z, int repeats) {
+        x = MathUtils.clamp(x, -30000000, 30000000);
+        y = MathUtils.clamp(y, -30000000, 30000000);
+        z = MathUtils.clamp(z, -30000000, 30000000);
+        repeats = MathUtils.clamp(repeats, 0, 100);
+        return TeleportHack.instance.teleportTo(x, y, z, repeats);
+    }
+
+    @ApiVisibility(ApiType.ACTION)
     public boolean vertical(double distance, int repeats) {
         distance = MathUtils.absClamp(distance, 1, 1000);
         repeats = MathUtils.clamp(repeats, 0, 100);

@@ -67,9 +67,29 @@
 
         <fieldset>
             <legend>Penetrable Blocks</legend>
+            <div>
+                <switch-checkbox v-model="config.autoPenetrableBlocks" @change="update()">Auto Detect Passable Blocks</switch-checkbox>
+                <div class="section-description">
+                    Reads what stops bullets from the game itself, mirroring TaCZ's own bullet
+                    ray-trace: blocks in the synced <b>tacz:bullet_ignore</b> tag and blocks
+                    without a collision shape (tall grass, flowers, ferns, snow layers...) never
+                    stop bullets and are treated as see-through automatically - no manual
+                    entries needed. Everything else blocks. The list below stays as manual
+                    overrides: enabled entries count as see-through, disabled entries count as
+                    blocking, whatever the auto rule says.
+                </div>
+            </div>
+            <div>
+                <switch-checkbox v-model="config.treatGlassAsPassable" @change="update()">Treat Glass As See-Through</switch-checkbox>
+                <div class="section-description">
+                    Shooting glass shatters it, so a fight effectively continues through the
+                    hole. With this on, glass (plain, tinted, stained and panes) counts as
+                    see-through for aiming.
+                </div>
+            </div>
             <div class="section-description">
-                Enabled blocks here don't block line of sight and don't stop the drawn trajectory,
-                so targets behind leaves, glass, iron bars and similar blocks can still be aimed at.
+                Manual overrides. Enabled blocks here don't block line of sight and don't stop
+                the drawn trajectory, so targets behind them can still be aimed at.
                 Uncheck an entry to keep it listed without letting bullets through.
             </div>
             <div>
@@ -165,15 +185,113 @@
                     TaCZ spawns bullets from the position the gun was drawn at, and only refreshes
                     that origin when a gun is drawn. After flying, falling or travelling far the
                     bullets keep spawning from the old spot, so every shot misses no matter how
-                    well you aim. With this option on, flying more than 2 blocks from the last
-                    synced position re-sends a draw to the server, which re-snapshots the origin
-                    at your current position.
+                    well you aim. With this option on, the module re-sends a draw to the server
+                    when you have moved more than 2 blocks from the last synced position: in the
+                    air always, and on the ground when a target-type entity is visible (an
+                    engagement is likely), so the origin catches up before the first shot of a
+                    fight.
                     <br><br>
                     Each sync costs the gun's put-away time (about 0.43s for the default SCAR-L)
                     before the next shot goes through, so syncing happens while you reposition -
-                    at most once per 1.5 seconds - and never while you are holding fire. Hover in
-                    place after a reposition and shots keep flying uninterrupted and on target.
+                    at most once per 1.5 seconds - and never while you are holding fire. Aiming,
+                    visibility checks and the drawn trajectory are always computed from the real
+                    bullet origin, so even between syncs the aim stays where the bullets go.
                 </div>
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>
+                <switch-checkbox v-model="config.autoFire" @change="update()">Auto Fire</switch-checkbox>
+            </legend>
+            <div class="section-description">
+                Fires automatically when the target lock holds a verified firing solution:
+                target visible, a ballistic solution found (when gun data is available), and
+                a TaCZ gun in the main hand. Shots go through the TaCZ client shoot
+                controllers, so the gun's own cooldown and fire mode routing apply; an empty
+                magazine still auto-reloads. Firing pauses automatically while a screen is
+                open or the window loses focus.
+            </div>
+            <div style="padding-top: 0.5em;">
+                <div>
+                    <radio name="tacz-auto-fire-mode" :value="'GUN'" v-model="config.autoFireMode" @change="update()">Follow Gun Fire Mode</radio>
+                    <div class="section-description">
+                        Full-auto guns (and continuous-burst guns) keep firing while the
+                        target is engaged; semi-auto and short-burst guns fire one shot per
+                        newly acquired target.
+                    </div>
+                </div>
+                <div>
+                    <radio name="tacz-auto-fire-mode" :value="'SINGLE'" v-model="config.autoFireMode" @change="update()">Single Shot Per Target</radio>
+                    <div class="section-description">
+                        One shot the moment a new enemy is acquired. Re-fires when the same
+                        target is lost and reacquired, or when the lock switches to another
+                        enemy.
+                    </div>
+                </div>
+                <div>
+                    <radio name="tacz-auto-fire-mode" :value="'FULL'" v-model="config.autoFireMode" @change="update()">Full Auto</radio>
+                    <div class="section-description">
+                        Keeps firing for as long as the target lock holds a firing solution,
+                        regardless of the gun's own fire mode.
+                    </div>
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>
+                <switch-checkbox v-model="config.teleportReposition" @change="update()">Teleport Repositioning</switch-checkbox>
+            </legend>
+            <div class="section-description">
+                Searches around you for a standable spot with line of sight to an enemy that
+                is fully hidden behind cover, and teleports there. The column scan reaches up
+                to 20 blocks above your feet, and elevated spots that stand above the enemy's
+                eye line at a healthy distance (high ground shooting over walls) are strongly
+                preferred; any sight-line spot is the fallback. The spot is drawn at random
+                and the previously attempted one is avoided, so repeated failures never keep
+                hitting the same position. The automatic trigger needs a TaCZ gun in hand; at
+                most one teleport per 3 seconds. Once the enemy becomes visible from the new
+                spot, the target lock acquires it and Auto Fire takes over.
+            </div>
+            <div style="padding-top: 0.5em;">
+                <div>
+                    <radio name="tacz-reposition-trigger" :value="'AUTO'" v-model="config.teleportRepositionTrigger" @change="update()">Automatic - Hidden Enemy</radio>
+                    <div class="section-description">
+                        Teleports on its own when the closest hidden enemy stays fully hidden
+                        for half a second and you have nothing visible to engage.
+                    </div>
+                </div>
+                <div>
+                    <radio name="tacz-reposition-trigger" :value="'MANUAL'" v-model="config.teleportRepositionTrigger" @change="update()">Manual - Script Only</radio>
+                    <div class="section-description">
+                        No automatic teleports. Trigger the search from your own script, for
+                        example bound to a key:
+                        <CodeBlock :code='`
+                            events.onHandleKeys(() => {
+                                if (input.isKeyDown("R")) {
+                                    taczAimAssist.repositionToHiddenEnemy();
+                                }
+                            });
+                        `' />
+                        Returns true when a teleport was performed.
+                    </div>
+                </div>
+            </div>
+            <div class="flex-row" v-if="config.teleportReposition">
+                <span class="field-description">Max Teleport:</span>
+                <input type="number" min="4" max="64" step="1" class="w3" v-model="config.teleportRepositionRange" @change="update()">
+            </div>
+            <div class="section-description" v-if="config.teleportReposition">
+                Maximum teleport distance in blocks (4-64).
+            </div>
+            <div class="flex-row" v-if="config.teleportReposition">
+                <span class="field-description">Repeats:</span>
+                <input type="number" min="0" max="100" step="1" class="w3" v-model="config.teleportRepositionRepeats" @change="update()">
+            </div>
+            <div class="section-description" v-if="config.teleportReposition">
+                Position-packet count for the teleport. Higher values survive longer jumps on
+                vanilla servers; more than 5 already looks suspicious to basic anticheats.
             </div>
         </fieldset>
 

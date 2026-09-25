@@ -31,5 +31,10 @@
             In other words module tries to find empty space with block belows in range -1..-50.
             You can swap -1 and -50 and module with try to find destination point from -50 and go back to -1.
         </div>
+        <div class="description">
+            Example 4: <b>teleport.toPosition(100, 70, -200, 5);</b> - module will attempt to teleport you to the specified X, Y, Z coordinates.
+            If your bounding box collides with blocks at the destination, module walks the line back to your current position and places you at the first collision-free spot (same as ender pearl landing).
+            Coordinates are clamped to +/- 30 million (Minecraft world limit).
+        </div>
     </div>
 </div>

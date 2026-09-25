@@ -42,6 +42,20 @@ public class TeleportHack {
         }
     }
 
+    public boolean teleportTo(double x, double y, double z, int repeats) {
+        if (mc.player == null || mc.level == null) {
+            return false;
+        }
+
+        Vec3 pos = mc.player.getPosition(1);
+        Vec3 target = new Vec3(x, y, z);
+        if (pos.distanceToSqr(target) < 0.01) {
+            return false;
+        }
+
+        return teleport(pos, target, pos, false, repeats);
+    }
+
     public boolean verticalTeleport(double distance, int repeats) {
         return verticalTeleport(distance, Math.signum(distance), false, repeats);
     }
