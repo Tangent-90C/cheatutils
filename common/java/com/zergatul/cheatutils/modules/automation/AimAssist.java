@@ -90,9 +90,9 @@ public class AimAssist implements Module {
     }
 
     /**
-     * Runtime switch on top of the config checkbox, so a key can be held to
-     * activate Aim Correction without persisting that state. Binding it to a
-     * key requires a script, see the Aim Assist page for an example.
+     * Runtime switch consulted only while the control mode is Key, so a key can be
+     * held to activate Aim Correction without persisting that state. Binding it to
+     * a key requires a script, see the Aim Assist page for an example.
      */
     public void enableAimCorrection() {
         aimCorrectionActive = true;
@@ -103,8 +103,14 @@ public class AimAssist implements Module {
         releaseCombatClick();
     }
 
+    /**
+     * Whether the module is currently allowed to act. In Config mode this follows
+     * the checkbox and ignores the runtime switch, so a script never sees a state
+     * the module isn't actually using.
+     */
     public boolean isAimCorrectionActive() {
-        return aimCorrectionActive;
+        AimAssistConfig config = ConfigStore.instance.getConfig().aimAssist;
+        return config.aimCorrection && (!config.isKeyControlMode() || aimCorrectionActive);
     }
 
     private void onTickEnd() {
@@ -218,7 +224,7 @@ public class AimAssist implements Module {
         aimPoint = null;
         aimRotation = null;
 
-        if (!aimCorrectionActive || !isAimCorrectionRunnable()) {
+        if (!isAimCorrectionRunnable()) {
             aimTarget = null;
             releaseCombatClick();
             return;
@@ -240,8 +246,11 @@ public class AimAssist implements Module {
         if (mc.screen != null) {
             return false;
         }
-        // keep the config gate last, aimWhileBlocking is the only branch read here
-        return config.aimWhileBlocking || !mc.player.isUsingItem();
+        if (!config.aimWhileBlocking && mc.player.isUsingItem()) {
+            return false;
+        }
+        // Config mode ignores the scripting switch entirely
+        return !config.isKeyControlMode() || aimCorrectionActive;
     }
 
     /**

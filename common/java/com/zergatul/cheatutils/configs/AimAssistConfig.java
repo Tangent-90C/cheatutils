@@ -12,9 +12,13 @@ public class AimAssistConfig implements ModuleStateProvider, ValidatableConfig {
     public static final String AimAtCenter = "Center";
     public static final String AimAtFeet = "Feet";
 
+    public static final String ControlModeConfig = "Config";
+    public static final String ControlModeKey = "Key";
+
     public boolean bowAssist;
 
     public boolean aimCorrection;
+    public String aimControlMode;
     public String aimAt;
     public double range;
     public int rotationSpeed;
@@ -33,6 +37,7 @@ public class AimAssistConfig implements ModuleStateProvider, ValidatableConfig {
     public boolean debugLogging;
 
     public AimAssistConfig() {
+        aimControlMode = ControlModeConfig;
         aimAt = AimAtAuto;
         range = 128;
         rotationSpeed = 600;
@@ -56,6 +61,15 @@ public class AimAssistConfig implements ModuleStateProvider, ValidatableConfig {
         return HoldMode.equals(combatFireMode);
     }
 
+    /**
+     * In Config mode the checkbox above is the only authority and the scripting
+     * switch is ignored. In Key mode the switch decides while the checkbox acts
+     * as a master enable.
+     */
+    public boolean isKeyControlMode() {
+        return ControlModeKey.equals(aimControlMode);
+    }
+
     @Override
     public void validate() {
         range = MathUtils.clamp(range, 1, 1024);
@@ -72,6 +86,11 @@ public class AimAssistConfig implements ModuleStateProvider, ValidatableConfig {
         if (aimAt == null || !aimAt.equals(AimAtAuto) && !aimAt.equals(AimAtHead)
                 && !aimAt.equals(AimAtCenter) && !aimAt.equals(AimAtFeet)) {
             aimAt = AimAtAuto;
+        }
+        if (aimControlMode == null
+                || !aimControlMode.equals(ControlModeConfig)
+                && !aimControlMode.equals(ControlModeKey)) {
+            aimControlMode = ControlModeConfig;
         }
     }
 }

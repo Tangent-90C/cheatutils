@@ -50,28 +50,45 @@
                 Slowly rotates your crosshair toward the closest valid entity to the look vector.
                 Rotation is limited by <b>Rotation Speed</b>, so it never snaps to the target and you can
                 override it with your own mouse movement.
-
-                <div>
-                    <br>
-                    To make it activate only while a key is held, use <b>Event Scripting</b> to
-                    toggle the runtime switch. This does not change the saved config, so the checkbox
-                    stays on and the key just gates it:
-                    <CodeBlock :code='`
-                        events.onHandleKeys(() => {
-                            if (input.isMouseDown(4)) {
-                                aimAssist.enableAimCorrection();
-                            } else {
-                                aimAssist.disableAimCorrection();
-                            }
-                        });
-                    `' />
-                    <b>input.isMouseDown</b> takes the raw GLFW button number: 0 is left, 1 is right,
-                    2 is middle, and 3 and 4 are the two side buttons. Use <b>input.isKeyDown</b>
-                    for a keyboard key instead. Aim Correction also has to stay enabled above,
-                    the key only acts as an additional gate.
-                </div>
             </div>
             <div class="group-setting" v-if="config.aimCorrection">
+                <fieldset>
+                    <legend>
+                        Control Mode
+                    </legend>
+                    <div>
+                        <radio name="aimControlMode" value="Config" v-model="config.aimControlMode" @change="update()">Config</radio>
+                        <radio name="aimControlMode" value="Key" v-model="config.aimControlMode" @change="update()">Key / Script</radio>
+                    </div>
+                    <div class="section-description">
+                        Which source decides whether Aim Correction runs, on top of the checkbox above
+                        which always has to be enabled.<br>
+                        <b>Config</b> - always runs when the checkbox is on. Scripting calls are ignored.<br>
+                        <b>Key / Script</b> - runs only while
+                        <b>aimAssist.enableAimCorrection()</b> is the last call made, which is how you
+                        bind it to a key.
+                    </div>
+                    <div v-if="config.aimControlMode == 'Key'">
+                        <br>
+                        Example for <b>Event Scripting</b> that activates Aim Correction only while a
+                        mouse side button is held:
+                        <CodeBlock :code='`
+                            events.onHandleKeys(() => {
+                                if (input.isMouseDown(4)) {
+                                    aimAssist.enableAimCorrection();
+                                } else {
+                                    aimAssist.disableAimCorrection();
+                                }
+                            });
+                        `' />
+                        <b>input.isMouseDown</b> takes the raw GLFW button number: 0 is left, 1 is right,
+                        2 is middle, and 3 and 4 are the two side buttons. Use <b>input.isKeyDown</b>
+                        for a keyboard key instead. The button number depends on your mouse, so try 3 and 4.<br>
+                        <br>
+                        Neither call writes to the config, so the switch state is not saved between
+                        launches and the checkbox above stays untouched.
+                    </div>
+                </fieldset>
                 <fieldset>
                     <legend>
                         Aim At
