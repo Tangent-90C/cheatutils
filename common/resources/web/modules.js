@@ -118,6 +118,13 @@ module({
 });
 module({
     group: 'esp',
+    name: 'Sound ESP',
+    component: 'SoundEsp',
+    path: 'sound-esp',
+    tags: ['sound', 'gun', 'audio', 'esp', 'lag']
+});
+module({
+    group: 'esp',
     name: 'Projectile Path',
     component: 'ProjectilePath',
     path: 'projectile-path',

@@ -6,20 +6,18 @@ public class SoundEspConfig implements ValidatableConfig, ModuleStateProvider {
 
     public boolean enabled;
     public boolean showMarkers;
+    public boolean drawTracers;
     public int markerDuration;
     public boolean skipMusic;
-    public boolean showHudList;
-    public int hudMaxEntries;
     public boolean writeCsv;
     public boolean markPlayerSpawn;
 
     public SoundEspConfig() {
         enabled = true;
         showMarkers = true;
+        drawTracers = true;
         markerDuration = 5;
         skipMusic = true;
-        showHudList = true;
-        hudMaxEntries = 8;
         writeCsv = true;
         markPlayerSpawn = true;
     }
@@ -27,7 +25,6 @@ public class SoundEspConfig implements ValidatableConfig, ModuleStateProvider {
     @Override
     public void validate() {
         markerDuration = MathUtils.clamp(markerDuration, 1, 60);
-        hudMaxEntries = MathUtils.clamp(hudMaxEntries, 0, 24);
     }
 
     @Override

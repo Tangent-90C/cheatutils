@@ -2,6 +2,7 @@ package com.zergatul.cheatutils.webui;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import com.zergatul.cheatutils.configs.SoundEspConfig;
 import com.zergatul.cheatutils.chunkoverlays.ExplorationMiniMapChunkOverlay;
 import com.zergatul.cheatutils.chunkoverlays.NewChunksOverlay;
 import com.zergatul.cheatutils.configs.*;
@@ -70,6 +71,17 @@ public class ApiHandler implements HttpHandler {
         apis.add(new ModulesStatusApi());
         apis.add(new BlockEspCodeApi());
         apis.add(new EntityEspCodeApi());
+        apis.add(new SimpleConfigApi<>("sound-esp", SoundEspConfig.class) {
+            @Override
+            protected SoundEspConfig getConfig() {
+                return ConfigStore.instance.getConfig().soundEspConfig;
+            }
+
+            @Override
+            protected void setConfig(SoundEspConfig config) {
+                ConfigStore.instance.getConfig().soundEspConfig = config;
+            }
+        });
         apis.add(new ProfilesApi());
         apis.add(new DebuggingApi());
         apis.add(new KillAuraCodeApi());

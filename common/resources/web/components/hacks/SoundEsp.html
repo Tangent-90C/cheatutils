@@ -1,0 +1,56 @@
+<div class="module-main" v-if="config">
+    <div class="description">
+        Marks positions of sounds received from the server (gunshots, footsteps, etc.) with Entity-ESP style boxes and tracers.
+        Color = sound category (players / hostile / neutral / blocks / voice).
+        <span style="color: #40ff40;">Green box</span> = player entity spawned on the client.
+        Sound markers appearing before the green box of the same player indicate server-side entity spawn delay.
+        All events are also logged to <b>sound_debug/*.csv</b> in the game directory for offline lag analysis.
+    </div>
+
+    <div class="module-sections">
+        <div>
+            <switch-checkbox v-model="config.enabled" @change="update()">Enabled</switch-checkbox>
+        </div>
+
+        <fieldset>
+            <legend>
+                Rendering
+            </legend>
+            <div>
+                <switch-checkbox v-model="config.showMarkers" @change="update()">Draw boxes</switch-checkbox>
+            </div>
+            <div>
+                <switch-checkbox v-model="config.drawTracers" @change="update()">Draw tracers</switch-checkbox>
+            </div>
+            <table>
+                <tr>
+                    <td>
+                        <span class="field-description">Duration:</span>
+                    </td>
+                    <td>
+                        <input type="text" class="w3" v-model="config.markerDuration" @change="update()">
+                    </td>
+                    <td>
+                        <div class="input-description">Seconds markers stay visible</div>
+                    </td>
+                </tr>
+            </table>
+        </fieldset>
+
+        <fieldset>
+            <legend>
+                Categories
+            </legend>
+            <div>
+                <switch-checkbox v-model="config.markPlayerSpawn" @change="update()">Mark player entity spawn (green)</switch-checkbox>
+            </div>
+            <div>
+                <switch-checkbox v-model="config.skipMusic" @change="update()">Skip music / records</switch-checkbox>
+            </div>
+        </fieldset>
+
+        <div>
+            <switch-checkbox v-model="config.writeCsv" @change="update()">Write CSV log (game dir /sound_debug)</switch-checkbox>
+        </div>
+    </div>
+</div>

@@ -6,11 +6,9 @@ import com.zergatul.cheatutils.configs.SoundEspConfig;
 import com.zergatul.cheatutils.mixins.common.accessors.EntityBoundSoundInstanceAccessor;
 import com.zergatul.cheatutils.modules.utilities.RenderUtilities;
 import com.zergatul.cheatutils.render.LineRenderer;
-import com.zergatul.cheatutils.common.events.RenderGuiEvent;
 import com.zergatul.cheatutils.common.events.RenderWorldLastEvent;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.resources.sounds.EntityBoundSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
@@ -29,14 +27,12 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayDeque;
-import java.util.Iterator;
-import java.util.Locale;
 import java.util.UUID;
 
 /**
- * Marks positions of sounds received by the client (gunshots, footsteps, etc.) and
- * optionally logs every sound event to CSV together with player entity spawn events,
- * so sound-to-entity lag can be measured offline.
+ * Marks positions of sounds received by the client (gunshots, footsteps, etc.)
+ * with Entity-ESP style boxes, and logs every sound event to CSV together with
+ * player entity spawn events, so sound-to-entity lag can be measured offline.
  */
 public class SoundEsp {
 
@@ -44,6 +40,9 @@ public class SoundEsp {
 
     private static final int MAX_MARKERS = 1024;
     private static final long NANOS_PER_SECOND = 1_000_000_000L;
+
+    private static final double BOX_HALF_WIDTH = 0.3;
+    private static final double BOX_HEIGHT = 1.8;
 
     private final Minecraft mc = Minecraft.getInstance();
     private final ArrayDeque<Marker> markers = new ArrayDeque<>();
@@ -54,7 +53,6 @@ public class SoundEsp {
 
     private SoundEsp() {
         Events.AfterRenderWorld.add(this::onRenderWorld);
-        Events.PreRenderGui.add(this::onPreRenderGui);
         Events.ClientTickEnd.add(this::onClientTickEnd);
         Events.EntityAdded.add(this::onEntityAdded);
         Events.ClientPlayerLoggingIn.add(this::onLoggingIn);
@@ -141,17 +139,22 @@ public class SoundEsp {
 
     private void onRenderWorld(RenderWorldLastEvent event) {
         SoundEspConfig config = getConfig();
-        if (!config.enabled || !config.showMarkers || mc.level == null) {
+        if (!config.enabled || mc.level == null || markers.isEmpty()) {
             return;
         }
 
         long now = System.nanoTime();
         pruneMarkers(now);
 
+        boolean drawBoxes = config.showMarkers;
+        boolean drawTracers = config.drawTracers;
+        if (!drawBoxes && !drawTracers) {
+            return;
+        }
+
         LineRenderer renderer = RenderUtilities.instance.getLineRenderer();
         renderer.begin(event, true);
 
-        Vec3 playerPos = mc.player != null ? mc.player.position() : null;
         for (Marker marker : markers) {
             long remain = marker.time + config.markerDuration * NANOS_PER_SECOND - now;
             float alpha = (float) remain / NANOS_PER_SECOND; // fade during the last second
@@ -162,130 +165,48 @@ public class SoundEsp {
                 continue;
             }
 
-            float r, g, b;
-            if (marker.isPlayerSpawn) {
-                r = 0.2f;
-                g = 1f;
-                b = 0.2f;
-            } else {
-                switch (marker.source) {
-                    case PLAYERS -> {
-                        r = 1f;
-                        g = 0.25f;
-                        b = 0.25f;
-                    }
-                    case HOSTILE -> {
-                        r = 1f;
-                        g = 0.6f;
-                        b = 0.1f;
-                    }
-                    case NEUTRAL -> {
-                        r = 1f;
-                        g = 1f;
-                        b = 0.2f;
-                    }
-                    case BLOCKS -> {
-                        r = 0.6f;
-                        g = 0.6f;
-                        b = 0.6f;
-                    }
-                    case VOICE -> {
-                        r = 0.4f;
-                        g = 0.6f;
-                        b = 1f;
-                    }
-                    default -> {
-                        r = 0.2f;
-                        g = 0.9f;
-                        b = 0.9f;
-                    }
-                }
+            if (config.skipMusic &&
+                    (marker.source == SoundSource.MUSIC || marker.source == SoundSource.RECORDS)) {
+                continue;
             }
 
-            drawMarker(renderer, marker.pos, r, g, b, alpha);
+            float[] rgb = markerColor(marker);
+            float r = rgb[0];
+            float g = rgb[1];
+            float b = rgb[2];
+
+            if (drawBoxes) {
+                renderer.cuboid(
+                        marker.pos.x - BOX_HALF_WIDTH, marker.pos.y, marker.pos.z - BOX_HALF_WIDTH,
+                        marker.pos.x + BOX_HALF_WIDTH, marker.pos.y + BOX_HEIGHT, marker.pos.z + BOX_HALF_WIDTH,
+                        r, g, b, alpha);
+            }
+
+            if (drawTracers) {
+                Vec3 tracerCenter = event.getTracerCenter();
+                renderer.line(
+                        tracerCenter.x, tracerCenter.y, tracerCenter.z,
+                        r, g, b, alpha,
+                        marker.pos.x, marker.pos.y + BOX_HEIGHT / 2, marker.pos.z,
+                        r, g, b, alpha);
+            }
         }
 
         renderer.end();
     }
 
-    private void drawMarker(LineRenderer renderer, Vec3 pos, float r, float g, float b, float a) {
-        double x = pos.x;
-        double y = pos.y;
-        double z = pos.z;
-        double h = 2.5;
-        double s = 0.4;
-
-        // vertical beam
-        renderer.line(x - s, y, z, r, g, b, a, x - s, y + h, z, r, g, b, a);
-        renderer.line(x + s, y, z, r, g, b, a, x + s, y + h, z, r, g, b, a);
-        renderer.line(x, y, z - s, r, g, b, a, x, y + h, z - s, r, g, b, a);
-        renderer.line(x, y, z + s, r, g, b, a, x, y + h, z + s, r, g, b, a);
-
-        // base square
-        renderer.line(x - s, y, z - s, r, g, b, a, x + s, y, z - s, r, g, b, a);
-        renderer.line(x + s, y, z - s, r, g, b, a, x + s, y, z + s, r, g, b, a);
-        renderer.line(x + s, y, z + s, r, g, b, a, x - s, y, z + s, r, g, b, a);
-        renderer.line(x - s, y, z + s, r, g, b, a, x - s, y, z - s, r, g, b, a);
-
-        // top square
-        double t = y + h;
-        renderer.line(x - s, t, z - s, r, g, b, a, x + s, t, z - s, r, g, b, a);
-        renderer.line(x + s, t, z - s, r, g, b, a, x + s, t, z + s, r, g, b, a);
-        renderer.line(x + s, t, z + s, r, g, b, a, x - s, t, z + s, r, g, b, a);
-        renderer.line(x - s, t, z + s, r, g, b, a, x - s, t, z - s, r, g, b, a);
-    }
-
-    // endregion
-
-    // region hud
-
-    private void onPreRenderGui(RenderGuiEvent event) {
-        SoundEspConfig config = getConfig();
-        if (!config.enabled || !config.showHudList || config.hudMaxEntries <= 0 || mc.level == null) {
-            return;
+    private float[] markerColor(Marker marker) {
+        if (marker.isPlayerSpawn) {
+            return new float[]{0.2f, 1f, 0.2f};
         }
-        if (markers.isEmpty() || mc.font == null) {
-            return;
-        }
-
-        long now = System.nanoTime();
-        Vec3 playerPos = mc.player != null ? mc.player.position() : null;
-
-        var graphics = event.graphics();
-        int x = 4;
-        int y = 4;
-        int line = mc.font.lineHeight + 2;
-
-        graphics.drawString(mc.font, "Sound ESP", x, y, 0xFF00FF00, true);
-        y += line;
-
-        int count = 0;
-        Iterator<Marker> it = markers.descendingIterator();
-        while (it.hasNext() && count < config.hudMaxEntries) {
-            Marker marker = it.next();
-            long ageMs = (now - marker.time) / 1_000_000L;
-            if (ageMs > config.markerDuration * 1000L) {
-                continue;
-            }
-
-            String name = marker.isPlayerSpawn
-                    ? "PLAYER_SPAWN"
-                    : (marker.location != null ? marker.location.getPath() : "?");
-            String text = String.format(Locale.ROOT, "%6dms %s %s", ageMs, name,
-                    formatPos(marker.pos));
-            if (playerPos != null) {
-                text += String.format(Locale.ROOT, " %.1fm", playerPos.distanceTo(marker.pos));
-            }
-
-            int color = marker.isPlayerSpawn ? 0xFF40FF40 : 0xFFFFDD55;
-            graphics.drawString(mc.font, text, x, y, color, true);
-            y += line;
-            count++;
-        }
-    }
-
-    private String formatPos(Vec3 pos) {
-        return String.format(Locale.ROOT, "(%.1f, %.1f, %.1f)", pos.x, pos.y, pos.z);
+        return switch (marker.source) {
+            case PLAYERS -> new float[]{1f, 0.25f, 0.25f};     // red
+            case HOSTILE -> new float[]{1f, 0.6f, 0.1f};       // orange
+            case NEUTRAL -> new float[]{1f, 1f, 0.2f};         // yellow
+            case BLOCKS -> new float[]{0.6f, 0.6f, 0.6f};      // gray
+            case VOICE -> new float[]{0.4f, 0.6f, 1f};         // blue
+            default -> new float[]{0.2f, 0.9f, 0.9f};          // cyan
+        };
     }
 
     // endregion
