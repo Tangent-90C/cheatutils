@@ -15,6 +15,6 @@ public abstract class MixinSoundEngine {
             at = @At("HEAD"),
             method = "play(Lnet/minecraft/client/resources/sounds/SoundInstance;)Lnet/minecraft/client/sounds/SoundEngine$PlayResult;")
     private void onPlay(SoundInstance sound, CallbackInfoReturnable<SoundEngine.PlayResult> info) {
-        SoundEsp.instance.onSoundInstance(sound);
+        SoundEsp.instance.onLocalSoundInstance(sound);
     }
 }

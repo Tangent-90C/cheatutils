@@ -1,11 +1,14 @@
 package com.zergatul.cheatutils.mixins.common;
 
 import com.zergatul.cheatutils.common.Events;
+import com.zergatul.cheatutils.modules.esp.SoundEsp;
 import com.zergatul.cheatutils.common.events.SendChatEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.game.ClientboundLoginPacket;
+import net.minecraft.network.protocol.game.ClientboundSoundEntityPacket;
+import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.network.protocol.game.ClientboundSetChunkCacheRadiusPacket;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -56,6 +59,20 @@ public abstract class MixinClientPacketListener {
             method = "handleLogin(Lnet/minecraft/network/protocol/game/ClientboundLoginPacket;)V")
     private void onPlayerLoggingIn(ClientboundLoginPacket packet, CallbackInfo info) {
         Events.ClientPlayerLoggingIn.trigger(this.getConnection());
+    }
+
+    @Inject(
+            at = @At("HEAD"),
+            method = "handleSoundEvent(Lnet/minecraft/network/protocol/game/ClientboundSoundPacket;)V")
+    private void onServerCoordinateSound(ClientboundSoundPacket packet, CallbackInfo info) {
+        SoundEsp.instance.onServerCoordinateSound(packet);
+    }
+
+    @Inject(
+            at = @At("HEAD"),
+            method = "handleSoundEntityEvent(Lnet/minecraft/network/protocol/game/ClientboundSoundEntityPacket;)V")
+    private void onServerEntitySound(ClientboundSoundEntityPacket packet, CallbackInfo info) {
+        SoundEsp.instance.onServerEntitySound(packet);
     }
 
     @Inject(method = "sendChat", at = @At("HEAD"), cancellable = true)

@@ -45,6 +45,9 @@
                 <switch-checkbox v-model="config.markPlayerSpawn" @change="update()">Mark player entity spawn (green)</switch-checkbox>
             </div>
             <div>
+                <switch-checkbox v-model="config.showEntitySoundPackets" @change="update()">Mark entity-bound sound packets (server sounds without xyz)</switch-checkbox>
+            </div>
+            <div>
                 <switch-checkbox v-model="config.skipMusic" @change="update()">Skip music / records</switch-checkbox>
             </div>
         </fieldset>

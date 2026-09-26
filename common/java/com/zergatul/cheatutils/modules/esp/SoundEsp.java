@@ -3,7 +3,6 @@ package com.zergatul.cheatutils.modules.esp;
 import com.zergatul.cheatutils.common.Events;
 import com.zergatul.cheatutils.configs.ConfigStore;
 import com.zergatul.cheatutils.configs.SoundEspConfig;
-import com.zergatul.cheatutils.mixins.common.accessors.EntityBoundSoundInstanceAccessor;
 import com.zergatul.cheatutils.modules.utilities.RenderUtilities;
 import com.zergatul.cheatutils.render.LineRenderer;
 import com.zergatul.cheatutils.common.events.RenderWorldLastEvent;
@@ -12,7 +11,10 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.resources.sounds.EntityBoundSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
+import com.zergatul.cheatutils.mixins.common.accessors.EntityBoundSoundInstanceAccessor;
 import net.minecraft.network.Connection;
+import net.minecraft.network.protocol.game.ClientboundSoundEntityPacket;
+import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
@@ -30,9 +32,16 @@ import java.util.ArrayDeque;
 import java.util.UUID;
 
 /**
- * Marks positions of sounds received by the client (gunshots, footsteps, etc.)
- * with Entity-ESP style boxes, and logs every sound event to CSV together with
- * player entity spawn events, so sound-to-entity lag can be measured offline.
+ * Marks positions of sounds the server explicitly sends with xyz coordinates
+ * (ClientboundSoundPacket - usually actions of hidden/removed entities), and logs
+ * every sound event to CSV together with player entity spawn events, so
+ * sound-to-entity lag can be measured offline.
+ *
+ * Sound sources are separated by path:
+ * - PACKET_COORD: server sound packet with explicit xyz - marked in the world
+ * - PACKET_ENTITY: server sound packet bound to an entity id - optional marking
+ * - LOCAL: anything played through SoundEngine without such packets (own sounds,
+ *   UI, client-predicted sounds) - CSV only, never marked
  */
 public class SoundEsp {
 
@@ -62,17 +71,85 @@ public class SoundEsp {
 
     // region capture
 
-    public void onSoundInstance(SoundInstance sound) {
+    /** Sound packet with explicit xyz coordinates - the only source marked in the world. */
+    public void onServerCoordinateSound(ClientboundSoundPacket packet) {
+        SoundEspConfig config = getConfig();
+        if (!config.enabled || mc.level == null) {
+            return;
+        }
+
+        try {
+            ResourceLocation location = packet.getSound().value().location();
+            Vec3 pos = new Vec3(packet.getX(), packet.getY(), packet.getZ());
+            long now = System.nanoTime();
+
+            Marker marker = new Marker(
+                    pos, location, packet.getSource(),
+                    packet.getVolume(), packet.getPitch(),
+                    false, false,
+                    null, null, now);
+            addMarker(marker);
+
+            if (config.writeCsv) {
+                writeCsv("SOUND_PACKET_COORD", location.toString(), packet.getSource().getName(),
+                        marker, false);
+            }
+        } catch (Throwable t) {
+            // never break packet processing because of our tooling
+        }
+    }
+
+    /** Sound packet bound to an entity id (position read from the entity object). */
+    public void onServerEntitySound(ClientboundSoundEntityPacket packet) {
+        SoundEspConfig config = getConfig();
+        if (!config.enabled || mc.level == null) {
+            return;
+        }
+
+        try {
+            ResourceLocation location = packet.getSound().value().location();
+            Vec3 pos = null;
+            UUID uuid = null;
+            Entity entity = mc.level.getEntity(packet.getId());
+            if (entity != null) {
+                pos = entity.position();
+                uuid = entity.getUUID();
+            }
+
+            if (config.writeCsv) {
+                long now = System.nanoTime();
+                Marker marker = new Marker(
+                        pos != null ? pos : Vec3.ZERO, location, packet.getSource(),
+                        packet.getVolume(), packet.getPitch(),
+                        false, false,
+                        uuid, pos, now);
+                writeCsv("SOUND_PACKET_ENTITY", location.toString(), packet.getSource().getName(),
+                        marker, uuid != null);
+            }
+
+            if (config.showEntitySoundPackets && pos != null) {
+                long now = System.nanoTime();
+                Marker marker = new Marker(
+                        pos, location, packet.getSource(),
+                        packet.getVolume(), packet.getPitch(),
+                        false, false,
+                        uuid, pos, now);
+                addMarker(marker);
+            }
+        } catch (Throwable t) {
+            // ignore
+        }
+    }
+
+    /** Any sound played locally through SoundEngine - CSV only, never marked. */
+    public void onLocalSoundInstance(SoundInstance sound) {
         SoundEspConfig config = getConfig();
         if (!config.enabled || mc.level == null || sound == null) {
             return;
         }
 
         try {
-            ResourceLocation location = sound.getLocation();
-            SoundSource source = sound.getSource();
             Vec3 pos = new Vec3(sound.getX(), sound.getY(), sound.getZ());
-
             UUID entityUuid = null;
             Vec3 entityPos = null;
             if (sound instanceof EntityBoundSoundInstance bound) {
@@ -83,19 +160,18 @@ public class SoundEsp {
                 }
             }
 
-            Marker marker = new Marker(
-                    pos, location, source,
-                    sound.getVolume(), sound.getPitch(),
-                    sound.isRelative(), false,
-                    entityUuid, entityPos, System.nanoTime());
-            addMarker(marker);
-
             if (config.writeCsv) {
-                writeCsv("SOUND", location.toString(), source.getName(), marker,
-                        entityUuid != null);
+                long now = System.nanoTime();
+                Marker marker = new Marker(
+                        pos, sound.getLocation(), sound.getSource(),
+                        sound.getVolume(), sound.getPitch(),
+                        sound.isRelative(), false,
+                        entityUuid, entityPos, now);
+                writeCsv("SOUND_LOCAL", sound.getLocation().toString(), sound.getSource().getName(),
+                        marker, entityUuid != null);
             }
         } catch (Throwable t) {
-            // never break sound playback because of our tooling
+            // ignore
         }
     }
 
@@ -197,15 +273,15 @@ public class SoundEsp {
 
     private float[] markerColor(Marker marker) {
         if (marker.isPlayerSpawn) {
-            return new float[]{0.2f, 1f, 0.2f};
+            return new float[]{0.2f, 1f, 0.2f};                 // green
         }
         return switch (marker.source) {
-            case PLAYERS -> new float[]{1f, 0.25f, 0.25f};     // red
-            case HOSTILE -> new float[]{1f, 0.6f, 0.1f};       // orange
-            case NEUTRAL -> new float[]{1f, 1f, 0.2f};         // yellow
-            case BLOCKS -> new float[]{0.6f, 0.6f, 0.6f};      // gray
-            case VOICE -> new float[]{0.4f, 0.6f, 1f};         // blue
-            default -> new float[]{0.2f, 0.9f, 0.9f};          // cyan
+            case PLAYERS -> new float[]{1f, 0.25f, 0.25f};      // red
+            case HOSTILE -> new float[]{1f, 0.6f, 0.1f};        // orange
+            case NEUTRAL -> new float[]{1f, 1f, 0.2f};          // yellow
+            case BLOCKS -> new float[]{0.6f, 0.6f, 0.6f};       // gray
+            case VOICE -> new float[]{0.4f, 0.6f, 1f};          // blue
+            default -> new float[]{0.2f, 0.9f, 0.9f};           // cyan
         };
     }
 

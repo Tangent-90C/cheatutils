@@ -6,6 +6,7 @@ public class SoundEspConfig implements ValidatableConfig, ModuleStateProvider {
 
     public boolean enabled;
     public boolean showMarkers;
+    public boolean showEntitySoundPackets;
     public boolean drawTracers;
     public int markerDuration;
     public boolean skipMusic;
@@ -15,6 +16,7 @@ public class SoundEspConfig implements ValidatableConfig, ModuleStateProvider {
     public SoundEspConfig() {
         enabled = true;
         showMarkers = true;
+        showEntitySoundPackets = false;
         drawTracers = true;
         markerDuration = 5;
         skipMusic = true;
