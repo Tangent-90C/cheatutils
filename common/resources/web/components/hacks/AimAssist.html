@@ -44,6 +44,145 @@
 
         <fieldset>
             <legend>
+                <switch-checkbox v-model="config.aimCorrection" @change="update()">Aim Correction</switch-checkbox>
+            </legend>
+            <div class="section-description">
+                Slowly rotates your crosshair toward the closest valid entity to the look vector.
+                Rotation is limited by <b>Rotation Speed</b>, so it never snaps to the target and you can
+                override it with your own mouse movement.
+            </div>
+            <div class="group-setting" v-if="config.aimCorrection">
+                <fieldset>
+                    <legend>
+                        Aim At
+                    </legend>
+                    <div>
+                        <radio name="aimAt" value="Auto" v-model="config.aimAt" @change="update()">Auto</radio>
+                        <radio name="aimAt" value="Head" v-model="config.aimAt" @change="update()">Head</radio>
+                        <radio name="aimAt" value="Center" v-model="config.aimAt" @change="update()">Center</radio>
+                        <radio name="aimAt" value="Feet" v-model="config.aimAt" @change="update()">Feet</radio>
+                    </div>
+                    <div class="section-description">
+                        Which part of the hitbox to aim at.<br>
+                        <b>Auto</b> - aims at whatever point of the hitbox is closest to your crosshair.<br>
+                        <b>Head</b> - aims at the target's eyes.<br>
+                        <b>Center</b> - aims at the middle of the hitbox.<br>
+                        <b>Feet</b> - aims at the bottom of the hitbox.<br>
+                        <br>
+                        The selected point is only a preference. If a block covers it, Aim Correction
+                        falls back to another exposed part instead of dropping the target, so partially
+                        visible entities are still attackable.
+                    </div>
+                </fieldset>
+                <div class="flex-row">
+                    <span class="field-description">Range:</span>
+                    <input type="text" class="w3" v-model="config.range" @change="update()">
+                </div>
+                <div class="section-description">
+                    Maximum distance to a target. Default: 128
+                </div>
+                <div class="flex-row">
+                    <span class="field-description">Rotation Speed:</span>
+                    <input type="text" class="w3" v-model="config.rotationSpeed" @change="update()">
+                </div>
+                <div class="section-description">
+                    Degrees per second the crosshair is allowed to rotate. Default: 600
+                </div>
+                <div class="flex-row">
+                    <span class="field-description">FOV:</span>
+                    <input type="text" class="w3" v-model="config.fov" @change="update()">
+                </div>
+                <div class="section-description">
+                    Only entities inside this cone around your crosshair are considered.
+                    Set to 360 to disable the limit. Default: 120
+                </div>
+                <div class="flex-row">
+                    <span class="field-description">Precision:</span>
+                    <input type="text" class="w3" v-model="config.precision" @change="update()">
+                </div>
+                <div class="section-description">
+                    Stop correcting once the crosshair is this many degrees away from the target,
+                    which prevents jitter around the aim point. Default: 0.1
+                </div>
+                <div>
+                    <switch-checkbox v-model="config.checkLineOfSight" @change="update()">
+                        Check Line of Sight
+                    </switch-checkbox>
+                </div>
+                <div>
+                    <switch-checkbox v-model="config.aimWhileBlocking" @change="update()">
+                        Aim While Blocking
+                    </switch-checkbox>
+                </div>
+                <div>
+                    <switch-checkbox v-model="config.filterTeammates" @change="update()">
+                        Filter Teammates
+                    </switch-checkbox>
+                    <div class="section-description">
+                        Skips players identified as teammates by scoreboard team or identical glowing color.
+                        Servers usually make teammates glow, so two equally glowing players count as a team.
+                    </div>
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>
+                <switch-checkbox v-model="config.combatMode" @change="update()">Combat Mode</switch-checkbox>
+            </legend>
+            <div class="section-description">
+                Automatically presses the attack key once Aim Correction is close enough to the aim point.
+                Requires <b>Aim Correction</b> to be enabled.<br>
+                <b>Warning:</b> while a block instead of an entity is under the crosshair, Combat Mode
+                still triggers the attack key and can break blocks. Turn it off while mining.
+            </div>
+            <div class="group-setting" v-if="config.combatMode">
+                <div>
+                    <radio name="fireMode" value="Click" v-model="config.combatFireMode" @change="update()">Click</radio>
+                    <radio name="fireMode" value="Hold" v-model="config.combatFireMode" @change="update()">Hold</radio>
+                </div>
+                <div class="section-description">
+                    <b>Click</b> - repeatedly clicks at "Clicks per second".<br>
+                    <b>Hold</b> - holds the attack button for fully automatic weapons.
+                </div>
+                <div class="flex-row">
+                    <span class="field-description">Clicks per second:</span>
+                    <input type="text" class="w3" v-model="config.clicksPerSecond" @change="update()">
+                </div>
+                <div class="section-description">
+                    Attack frequency in Click mode. Values below 1 are allowed for slow weapons.
+                    Default: 10
+                </div>
+                <div class="flex-row">
+                    <span class="field-description">First attack delay:</span>
+                    <input type="text" class="w3" v-model="config.firstAttackDelay" @change="update()">
+                </div>
+                <div class="section-description">
+                    Milliseconds to wait after the crosshair reaches the aim point before the first click.
+                    Set to 0 for no delay. Default: 0
+                </div>
+                <div class="flex-row">
+                    <span class="field-description">Attack tolerance:</span>
+                    <input type="text" class="w3" v-model="config.attackTolerance" @change="update()">
+                </div>
+                <div class="section-description">
+                    Maximum angular error at which Combat Mode is allowed to attack. Default: 1
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>
+                <switch-checkbox v-model="config.debugLogging" @change="update()">Debug Logging</switch-checkbox>
+            </legend>
+            <div class="section-description">
+                Writes Aim Correction diagnostics to the console and latest.log once per second, including
+                how many entities were rejected and why. Useful when a target is not being picked up.
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>
                 Target Lock
             </legend>
             <div class="section-description">

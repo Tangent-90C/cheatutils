@@ -116,6 +116,15 @@
                         Enabled
                     </switch-checkbox>
                 </div>
+                <div v-if="selectedConfig.clazz == 'net.minecraft.world.entity.player.Player'">
+                    <switch-checkbox v-model="selectedConfig.ignoreTeammates" @change="update(selectedConfig)">
+                        Hide Teammates
+                    </switch-checkbox>
+                    <div class="section-description">
+                        Skips players identified as teammates by scoreboard team or identical glowing color.
+                        Servers usually make teammates glow, so two equally glowing players count as a team.
+                    </div>
+                </div>
                 <div class="flex-row">
                     <span class="field-description">Max Distance:</span>
                     <input type="text" class="w5" v-model="selectedConfig.maxDistance" @change="update(selectedConfig)">

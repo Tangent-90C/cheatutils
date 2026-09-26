@@ -332,7 +332,7 @@ module({
     name: 'Aim Assist',
     component: 'AimAssist',
     path: 'aim-assist',
-    tags: ['aim', 'bow', 'assist']
+    tags: ['aim', 'bow', 'assist', 'combat']
 });
 
 module({

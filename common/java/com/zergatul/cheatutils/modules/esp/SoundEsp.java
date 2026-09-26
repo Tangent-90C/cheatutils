@@ -61,6 +61,8 @@ public class SoundEsp {
     private final Minecraft mc = Minecraft.getInstance();
     private final ArrayDeque<Marker> markers = new ArrayDeque<>();
 
+    private final java.util.Map<MarkerKey, Marker> lastFrameMarker = new java.util.HashMap<>();
+
     private BufferedWriter csvWriter;
     private boolean csvFailed;
     private long sessionNanos;
@@ -142,6 +144,60 @@ public class SoundEsp {
                         false, false,
                         uuid, pos, now);
                 addMarker(marker);
+            }
+        } catch (Throwable t) {
+            // ignore
+        }
+    }
+
+    /**
+     * Catch-all: any sound instance the engine asks for a position, including mods that
+     * bypass vanilla sound packets. Marked only for sounds that are not the local player's
+     * own (position == player position is treated as own sound) and only once per tick.
+     */
+    public void onActiveSound(SoundInstance sound) {
+        SoundEspConfig config = getConfig();
+        if (!config.enabled || mc.level == null || sound == null) {
+            return;
+        }
+
+        try {
+            UUID entityUuid = null;
+            Vec3 entityPos = null;
+            if (sound instanceof EntityBoundSoundInstance bound) {
+                Entity entity = ((EntityBoundSoundInstanceAccessor) bound).getEntity_CU();
+                if (entity != null) {
+                    entityUuid = entity.getUUID();
+                    entityPos = entity.position();
+                    if (entity == mc.player) {
+                        return; // own sound
+                    }
+                }
+            }
+
+            Vec3 pos = new Vec3(sound.getX(), sound.getY(), sound.getZ());
+            if (entityUuid == null && mc.player != null && pos.distanceToSqr(mc.player.position()) < 4) {
+                return; // non-entity sound right next to us - almost certainly own/UI
+            }
+
+            MarkerKey key = new MarkerKey(sound.getLocation(), sound.getSource(), pos);
+            long now = System.nanoTime();
+            Marker active = lastFrameMarker.get(key);
+            if (active != null && now - active.time < 50_000_000L) {
+                return; // same sound still playing, already logged this ~3 ticks
+            }
+
+            Marker marker = new Marker(
+                    pos, sound.getLocation(), sound.getSource(),
+                    sound.getVolume(), sound.getPitch(),
+                    false, false,
+                    entityUuid, entityPos, now);
+            lastFrameMarker.put(key, marker);
+            addMarker(marker);
+
+            if (config.writeCsv) {
+                writeCsv("SOUND_ACTIVE", sound.getLocation().toString(), sound.getSource().getName(),
+                        marker, entityUuid != null);
             }
         } catch (Throwable t) {
             // ignore
@@ -410,6 +466,9 @@ public class SoundEsp {
 
     private static SoundEspConfig getConfig() {
         return ConfigStore.instance.getConfig().soundEspConfig;
+    }
+
+    private record MarkerKey(ResourceLocation location, SoundSource source, Vec3 pos) {
     }
 
     private record Marker(

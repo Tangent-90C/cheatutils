@@ -2,7 +2,10 @@ package com.zergatul.cheatutils.configs;
 
 import com.zergatul.cheatutils.configs.adapters.GsonSkip;
 import com.zergatul.cheatutils.scripting.EntityEspConsumer;
+import com.zergatul.cheatutils.utils.TeamUtils;
+import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 
 import java.awt.*;
 
@@ -26,12 +29,17 @@ public class EntityEspConfig extends EspConfigBase {
 
     public boolean scriptEnabled;
     public String code;
+    public boolean ignoreTeammates;
 
     @GsonSkip
     public EntityEspConsumer script;
 
     public boolean isValidEntity(Entity entity) {
-        return clazz.isInstance(entity);
+        if (!clazz.isInstance(entity)) {
+            return false;
+        }
+        return !ignoreTeammates
+                || !TeamUtils.isTeammate(Minecraft.getInstance().player, entity);
     }
 
     public double getGlowMaxDistanceSqr() {
@@ -59,6 +67,7 @@ public class EntityEspConfig extends EspConfigBase {
         showOwner = jsonConfig.showOwner;
 
         scriptEnabled = jsonConfig.scriptEnabled;
+        ignoreTeammates = jsonConfig.ignoreTeammates;
     }
 
     public boolean useMinecraftOutline() {
@@ -86,6 +95,7 @@ public class EntityEspConfig extends EspConfigBase {
         config.glowColor = Color.WHITE;
         config.drawOverlay = false;
         config.overlayColor = new Color(0x80FFFFFF, true);
+        config.ignoreTeammates = Player.class.isAssignableFrom(clazz);
         return config;
     }
 }

@@ -39,6 +39,25 @@ public class AimAssistApi {
         AimAssist.instance.disableTargetLock();
     }
 
+    public boolean isAimCorrectionEnabled() {
+        return getConfig().aimCorrection;
+    }
+
+    public void toggleAimCorrection() {
+        AimAssistConfig config = getConfig();
+        config.aimCorrection = !config.aimCorrection;
+        ConfigStore.instance.requestWrite();
+    }
+
+    public boolean hasAimTarget() {
+        return AimAssist.instance.getAimTarget() != null;
+    }
+
+    public int getAimTargetEntityId() {
+        Entity target = AimAssist.instance.getAimTarget();
+        return target != null ? target.getId() : Integer.MIN_VALUE;
+    }
+
     private AimAssistConfig getConfig() {
         return ConfigStore.instance.getConfig().aimAssist;
     }

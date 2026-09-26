@@ -65,6 +65,7 @@ public class ConfigStore {
                 migration2(element);
                 migration3(element);
                 migration4(element);
+                migration5(element);
                 readCfg = gson.fromJson(element, Config.class);
                 reader.close();
             } catch (Exception e) {
@@ -142,6 +143,7 @@ public class ConfigStore {
         config.areaMineConfig.validate();
         config.hitboxSizeConfig.validate();
         config.coreConfig.validate();
+        config.aimAssist.validate();
 
         config.blocks.refreshMap();
 
@@ -405,5 +407,58 @@ public class ConfigStore {
 
         root.remove("scriptsConfig");
         root.add("keyBindingScriptsConfig", config);
+    }
+
+    private void migration5(JsonElement element) {
+        if (!element.isJsonObject()) {
+            return;
+        }
+
+        JsonObject root = element.getAsJsonObject();
+        if (!root.has("aimAssist")) {
+            return;
+        }
+
+        JsonElement config = root.get("aimAssist");
+        if (!config.isJsonObject()) {
+            return;
+        }
+
+        // Gson leaves fields absent from older configs at their JVM defaults,
+        // so fill in the actual defaults before validate() clamps them.
+        JsonObject aimAssist = config.getAsJsonObject();
+        if (!aimAssist.has("range")) {
+            aimAssist.addProperty("range", 128);
+        }
+        if (!aimAssist.has("rotationSpeed")) {
+            aimAssist.addProperty("rotationSpeed", 600);
+        }
+        if (!aimAssist.has("fov")) {
+            aimAssist.addProperty("fov", 120);
+        }
+        if (!aimAssist.has("precision")) {
+            aimAssist.addProperty("precision", 0.1);
+        }
+        if (!aimAssist.has("checkLineOfSight")) {
+            aimAssist.addProperty("checkLineOfSight", true);
+        }
+        if (!aimAssist.has("aimWhileBlocking")) {
+            aimAssist.addProperty("aimWhileBlocking", false);
+        }
+        if (!aimAssist.has("filterTeammates")) {
+            aimAssist.addProperty("filterTeammates", true);
+        }
+        if (!aimAssist.has("combatFireMode")) {
+            aimAssist.addProperty("combatFireMode", AimAssistConfig.ClickMode);
+        }
+        if (!aimAssist.has("clicksPerSecond")) {
+            aimAssist.addProperty("clicksPerSecond", 10);
+        }
+        if (!aimAssist.has("firstAttackDelay")) {
+            aimAssist.addProperty("firstAttackDelay", 0);
+        }
+        if (!aimAssist.has("attackTolerance")) {
+            aimAssist.addProperty("attackTolerance", 1);
+        }
     }
 }
