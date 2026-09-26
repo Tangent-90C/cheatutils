@@ -3,6 +3,8 @@ package com.zergatul.cheatutils.scripting.modules;
 import com.zergatul.cheatutils.configs.AimAssistConfig;
 import com.zergatul.cheatutils.configs.ConfigStore;
 import com.zergatul.cheatutils.modules.automation.AimAssist;
+import com.zergatul.cheatutils.scripting.ApiType;
+import com.zergatul.cheatutils.scripting.ApiVisibility;
 import net.minecraft.world.entity.Entity;
 
 @SuppressWarnings("unused")
@@ -47,6 +49,24 @@ public class AimAssistApi {
         AimAssistConfig config = getConfig();
         config.aimCorrection = !config.aimCorrection;
         ConfigStore.instance.requestWrite();
+    }
+
+    /**
+     * Holds Aim Correction on for as long as a key is down, without touching the
+     * saved config. Pair with {@code events.onHandleKeys} to bind a key.
+     */
+    @ApiVisibility(ApiType.ACTION)
+    public void enableAimCorrection() {
+        AimAssist.instance.enableAimCorrection();
+    }
+
+    @ApiVisibility(ApiType.ACTION)
+    public void disableAimCorrection() {
+        AimAssist.instance.disableAimCorrection();
+    }
+
+    public boolean isAimCorrectionActive() {
+        return AimAssist.instance.isAimCorrectionActive();
     }
 
     public boolean hasAimTarget() {

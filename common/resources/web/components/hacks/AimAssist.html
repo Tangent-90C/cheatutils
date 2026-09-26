@@ -50,6 +50,26 @@
                 Slowly rotates your crosshair toward the closest valid entity to the look vector.
                 Rotation is limited by <b>Rotation Speed</b>, so it never snaps to the target and you can
                 override it with your own mouse movement.
+
+                <div>
+                    <br>
+                    To make it activate only while a key is held, use <b>Event Scripting</b> to
+                    toggle the runtime switch. This does not change the saved config, so the checkbox
+                    stays on and the key just gates it:
+                    <CodeBlock :code='`
+                        events.onHandleKeys(() => {
+                            if (input.isMouseDown(4)) {
+                                aimAssist.enableAimCorrection();
+                            } else {
+                                aimAssist.disableAimCorrection();
+                            }
+                        });
+                    `' />
+                    <b>input.isMouseDown</b> takes the raw GLFW button number: 0 is left, 1 is right,
+                    2 is middle, and 3 and 4 are the two side buttons. Use <b>input.isKeyDown</b>
+                    for a keyboard key instead. Aim Correction also has to stay enabled above,
+                    the key only acts as an additional gate.
+                </div>
             </div>
             <div class="group-setting" v-if="config.aimCorrection">
                 <fieldset>

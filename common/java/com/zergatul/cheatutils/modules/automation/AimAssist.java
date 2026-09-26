@@ -55,6 +55,7 @@ public class AimAssist implements Module {
 
     private Entity aimTarget;
     private Vec3 aimPoint;
+    private boolean aimCorrectionActive = true;
     private Rotation aimRotation;
     private long lastDebugLogTime;
     private long debugCorrections;
@@ -86,6 +87,24 @@ public class AimAssist implements Module {
 
     public Entity getBowAssistTarget() {
         return bowAssistTarget;
+    }
+
+    /**
+     * Runtime switch on top of the config checkbox, so a key can be held to
+     * activate Aim Correction without persisting that state. Binding it to a
+     * key requires a script, see the Aim Assist page for an example.
+     */
+    public void enableAimCorrection() {
+        aimCorrectionActive = true;
+    }
+
+    public void disableAimCorrection() {
+        aimCorrectionActive = false;
+        releaseCombatClick();
+    }
+
+    public boolean isAimCorrectionActive() {
+        return aimCorrectionActive;
     }
 
     private void onTickEnd() {
@@ -196,23 +215,11 @@ public class AimAssist implements Module {
     }
 
     private void updateAimCorrection() {
-        AimAssistConfig config = ConfigStore.instance.getConfig().aimAssist;
+        aimPoint = null;
+        aimRotation = null;
 
-        if (!config.aimCorrection || mc.player == null || mc.level == null) {
+        if (!aimCorrectionActive || !isAimCorrectionRunnable()) {
             aimTarget = null;
-            aimRotation = null;
-            releaseCombatClick();
-            return;
-        }
-        if (mc.screen != null) {
-            aimTarget = null;
-            aimRotation = null;
-            releaseCombatClick();
-            return;
-        }
-        if (!config.aimWhileBlocking && mc.player.isUsingItem()) {
-            aimTarget = null;
-            aimRotation = null;
             releaseCombatClick();
             return;
         }
@@ -223,6 +230,18 @@ public class AimAssist implements Module {
         computeAimRotation();
         updateCombatClick();
         logDiagnostics();
+    }
+
+    private boolean isAimCorrectionRunnable() {
+        AimAssistConfig config = ConfigStore.instance.getConfig().aimAssist;
+        if (!config.aimCorrection || mc.player == null || mc.level == null) {
+            return false;
+        }
+        if (mc.screen != null) {
+            return false;
+        }
+        // keep the config gate last, aimWhileBlocking is the only branch read here
+        return config.aimWhileBlocking || !mc.player.isUsingItem();
     }
 
     /**
