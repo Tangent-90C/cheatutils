@@ -21,6 +21,9 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -49,6 +52,8 @@ public class SoundEsp {
 
     private static final int MAX_MARKERS = 1024;
     private static final long NANOS_PER_SECOND = 1_000_000_000L;
+
+    private static final Logger LOGGER = LogManager.getLogger(SoundEsp.class);
 
     private static final double BOX_HALF_WIDTH = 0.3;
     private static final double BOX_HEIGHT = 1.8;
@@ -82,6 +87,7 @@ public class SoundEsp {
             ResourceLocation location = packet.getSound().value().location();
             Vec3 pos = new Vec3(packet.getX(), packet.getY(), packet.getZ());
             long now = System.nanoTime();
+            LOGGER.info("SoundEsp coordinate sound packet: {} at {}, {}, {}", location, pos.x, pos.y, pos.z);
 
             Marker marker = new Marker(
                     pos, location, packet.getSource(),
@@ -108,6 +114,7 @@ public class SoundEsp {
 
         try {
             ResourceLocation location = packet.getSound().value().location();
+            LOGGER.info("SoundEsp entity sound packet: {}", location);
             Vec3 pos = null;
             UUID uuid = null;
             Entity entity = mc.level.getEntity(packet.getId());
@@ -147,6 +154,7 @@ public class SoundEsp {
         if (!config.enabled || mc.level == null || sound == null) {
             return;
         }
+        LOGGER.info("SoundEsp local sound: {}", sound.getLocation());
 
         try {
             Vec3 pos = new Vec3(sound.getX(), sound.getY(), sound.getZ());

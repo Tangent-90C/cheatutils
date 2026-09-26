@@ -13,6 +13,9 @@ public abstract class MixinSoundEngine {
 
     @Inject(
             at = @At("HEAD"),
+            // require = 1 so the injection cannot fail silently (cheatutils mixin
+            // config uses defaultRequire = 0, which hides descriptor mismatches)
+            require = 1,
             method = "play(Lnet/minecraft/client/resources/sounds/SoundInstance;)Lnet/minecraft/client/sounds/SoundEngine$PlayResult;")
     private void onPlay(SoundInstance sound, CallbackInfoReturnable<SoundEngine.PlayResult> info) {
         SoundEsp.instance.onLocalSoundInstance(sound);

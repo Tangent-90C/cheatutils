@@ -63,6 +63,7 @@ public abstract class MixinClientPacketListener {
 
     @Inject(
             at = @At("HEAD"),
+            require = 1,
             method = "handleSoundEvent(Lnet/minecraft/network/protocol/game/ClientboundSoundPacket;)V")
     private void onServerCoordinateSound(ClientboundSoundPacket packet, CallbackInfo info) {
         SoundEsp.instance.onServerCoordinateSound(packet);
@@ -70,6 +71,7 @@ public abstract class MixinClientPacketListener {
 
     @Inject(
             at = @At("HEAD"),
+            require = 1,
             method = "handleSoundEntityEvent(Lnet/minecraft/network/protocol/game/ClientboundSoundEntityPacket;)V")
     private void onServerEntitySound(ClientboundSoundEntityPacket packet, CallbackInfo info) {
         SoundEsp.instance.onServerEntitySound(packet);
