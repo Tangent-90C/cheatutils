@@ -5,6 +5,7 @@ import com.zergatul.cheatutils.mixins.common.accessors.InputConstantsKeyAccessor
 import com.zergatul.scripting.MethodDescription;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -55,7 +56,31 @@ public class InputApi {
         if (inputKey.getType() == InputConstants.Type.KEYSYM) {
             return InputConstants.isKeyDown(mc.getWindow().getWindow(), inputKey.getValue());
         }
+        if (inputKey.getType() == InputConstants.Type.MOUSE) {
+            return isMouseDown(inputKey.getValue());
+        }
 
         return false;
+    }
+
+    /**
+     * Button numbers are raw GLFW, matching what {@code glfwGetMouseButton} takes:
+     * 0 is left, 1 is right, 2 is middle, and 3 and 4 are the two side buttons.
+     *
+     * <p>{@link #isKeyDown} can't be used for this because
+     * {@code InputConstants.isKeyDown} reports keyboard keys only, and side
+     * buttons aren't in the name map until something binds them.</p>
+     */
+    @MethodDescription("""
+            Checks if a mouse button is currently pressed. Button numbers are raw GLFW numbers,
+            as printed by the "Mouse" column in the Key Binds screen: 0 - left, 1 - right,
+            2 - middle, 3 and 4 - side buttons.
+            """)
+    public boolean isMouseDown(int button) {
+        if (!mc.isWindowActive()) {
+            return false;
+        }
+
+        return GLFW.glfwGetMouseButton(mc.getWindow().getWindow(), button) == GLFW.GLFW_PRESS;
     }
 }
