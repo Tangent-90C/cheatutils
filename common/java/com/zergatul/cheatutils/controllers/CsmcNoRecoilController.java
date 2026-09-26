@@ -1,9 +1,12 @@
 package com.zergatul.cheatutils.controllers;
 
+import com.zergatul.cheatutils.common.Events;
 import com.zergatul.cheatutils.configs.ConfigStore;
 import com.zergatul.cheatutils.configs.CsmcNoRecoilConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
+
+import java.lang.reflect.Method;
 
 /**
  * Removes rotation offset that mods add to the view, for example the recoil kick of a shooter mod.
@@ -21,16 +24,63 @@ public class CsmcNoRecoilController {
     private final Minecraft mc = Minecraft.getInstance();
 
     private boolean snapshotValid;
+    private boolean sending;
+    private boolean spreadOptionsSearched;
+    private Method spreadOptionsSetter;
     private float yRot;
     private float xRot;
+    private float sentYRot;
+    private float sentXRot;
 
     private CsmcNoRecoilController() {
-
+        Events.ClientTickStart.add(this::onTickStart);
+        Events.BeforeSendPlayerPos.add(this::onBeforeSendPosition);
+        Events.AfterSendPlayerPos.add(this::onAfterSendPosition);
     }
 
-    public boolean isActive() {
+        public boolean isActive() {
         CsmcNoRecoilConfig config = ConfigStore.instance.getConfig().csmcNoRecoilConfig;
-        return config.enabled && config.amount > 0 && mc.player != null;
+        // the view hold is what a locked crosshair means; mode 2 leaves the punch visible
+        return config.enabled
+                && config.mode != 2
+                && config.amount > 0
+                && mc.player != null;
+    }
+
+        private void onTickStart() {
+        CsmcNoRecoilConfig config = ConfigStore.instance.getConfig().csmcNoRecoilConfig;
+        // every flag must die with the module: the hooks live inside CSMC's own code path, so without
+        // this gate a "disabled" module would keep reshaping shot direction
+        boolean active = config.enabled && mc.player != null;
+        pushSpreadOptions(
+                active && config.mode != 2,
+                active && config.mode == 1,
+                active);
+    }
+
+    /**
+     * The CSMC mixin lives in a source set that is compiled without the mixin annotation processor and is
+     * not on this source set's compile classpath, and common sources are shared with loaders that don't have
+     * it at all. Reflection keeps both directions free of a compile dependency.
+     * <p>
+     * Throwable rather than ReflectiveOperationException: Mixin rejects loading classes from inside a mixin
+     * package with an IllegalClassLoadError, which is an Error. This runs every tick, so a surprise here must
+     * degrade to doing nothing instead of taking the client down.
+     */
+        private void pushSpreadOptions(boolean smoothRecoil, boolean patternPunch, boolean noSpread) {
+        try {
+            if (spreadOptionsSetter == null && !spreadOptionsSearched) {
+                spreadOptionsSetter = Class
+                        .forName("com.zergatul.cheatutils.csmc.CsmcSpreadOptions")
+                        .getMethod("update", boolean.class, boolean.class, boolean.class);
+                spreadOptionsSearched = true;
+            }
+            if (spreadOptionsSetter != null) {
+                spreadOptionsSetter.invoke(null, smoothRecoil, patternPunch, noSpread);
+            }
+        } catch (Throwable error) {
+            // absent on loaders without the csmc source set, or the class was renamed - nothing to push
+        }
     }
 
     /**
@@ -63,5 +113,31 @@ public class CsmcNoRecoilController {
 
     private float amount() {
         return ConfigStore.instance.getConfig().csmcNoRecoilConfig.getAmount();
+    }
+
+    /**
+     * Sends the aimed-at rotation instead of whatever offset a mod applied after it. Recoil offsets show up
+     * in the position the server receives even when the view itself is already corrected, because the packet
+     * is built before the render frame restores the view. Reusing the frame snapshot keeps "what you see is
+     * what the server gets".
+     */
+    private void onBeforeSendPosition() {
+        if (!snapshotValid || mc.player == null || !ConfigStore.instance.getConfig().csmcNoRecoilConfig.sendCleanRotation) {
+            return;
+        }
+        sending = true;
+        sentYRot = mc.player.getYRot();
+        sentXRot = mc.player.getXRot();
+        mc.player.setYRot(yRot);
+        mc.player.setXRot(xRot);
+    }
+
+    private void onAfterSendPosition() {
+        if (!sending || mc.player == null) {
+            return;
+        }
+        sending = false;
+        mc.player.setYRot(sentYRot);
+        mc.player.setXRot(sentXRot);
     }
 }

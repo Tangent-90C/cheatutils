@@ -1,6 +1,7 @@
 <div class="module-main" v-if="config">
     <div class="description">
-        Removes rotation offset applied to the view while the frame is rendered, such as shooter recoil. Set Amount below 100% to confirm the offset is really being removed.
+        Controls how recoil affects your shot. The view hold pulls the camera back to where you aimed before
+        the frame is rendered; the CSMC hooks reshape the predicted bullet direction on top of that.
     </div>
 
     <div class="module-sections">
@@ -8,8 +9,31 @@
             <switch-checkbox v-model="config.enabled" @change="update()">Enabled</switch-checkbox>
         </div>
         <div>
-            <span class="field-description">Amount, %:</span>
+            <span class="field-description">Mode:</span>
+            <label><input type="radio" value="1" v-model.number="config.mode" @change="update()"> Dead aim</label>
+            <label><input type="radio" value="2" v-model.number="config.mode" @change="update()"> View kick</label>
+            <label><input type="radio" value="3" v-model.number="config.mode" @change="update()"> Locked legacy</label>
+            <div class="description">
+                Dead aim: crosshair locked, everything hits the crosshair - no recoil compensation at all.
+                <br>
+                View kick: the crosshair climbs with recoil as usual, but impacts group on the original point.
+                <br>
+                Locked legacy: crosshair locked with the old behaviour - the stream pins but not all bullets
+                land on one point.
+            </div>
+        </div>
+        <div>
+            <span class="field-description">View hold, %:</span>
             <input type="number" min="0" max="100" class="w5" v-model="config.amount" @change="update()">
+            <span class="field-description">(dead aim / locked legacy only; 100 = fully fixed)</span>
+        </div>
+        <div>
+            <switch-checkbox v-model="config.sendCleanRotation" @change="update()">Send Clean Rotation</switch-checkbox>
+            <div class="description">
+                Also sends the aimed-at rotation instead of the recoil-affected one, so the server sees the
+                same direction you see. Expect up to one frame of aim lag, because the value comes from the
+                last rendered frame.
+            </div>
         </div>
     </div>
 </div>

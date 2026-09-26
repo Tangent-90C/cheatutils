@@ -102,6 +102,7 @@
 
     "fabric.compatibility.iris.MixinOuterWrappedRenderType",
     "fabric.compatibility.sodium.MixinBlockModelApiMemoryVertexConsumer",
-    "fabric.compatibility.sodium.MixinEntityEspVertexConsumerWrapper"
+    "fabric.compatibility.sodium.MixinEntityEspVertexConsumerWrapper",
+    "fabric.compatibility.csmc.MixinCsmcSpread"
   ]
 }

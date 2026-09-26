@@ -63,6 +63,35 @@ sourceSets {
             srcDir '../common/resources'
         }
     }
+
+    // Mixins into third-party mods that are not compile-time dependencies. The mixin annotation processor
+    // validates every target it sees, so it is not run here: it cannot resolve classes like
+    // me.fadeorite.csmcmod.b$2j, and it rejects the non-ASCII identifiers those mods use. Mixin only reads
+    // the target names as strings at runtime, so compiling without the processor is safe.
+    // This source set must not reference the main one, otherwise compileCsmcJava and compileJava form a
+    // cycle; the CsmcSpreadOptions holder is how main passes its config across.
+    csmc {
+        java {
+            srcDir 'src/csmc/java'
+        }
+        // External dependencies only. Pulling in the main output would create a cycle, because main
+        // already depends on this source set.
+        compileClasspath += sourceSets.main.compileClasspath - sourceSets.main.output
+    }
+}
+
+tasks.named('compileCsmcJava') {
+    options.annotationProcessorPath = files()
+}
+
+compileJava {
+    dependsOn tasks.named('compileCsmcJava')
+}
+
+sourceSets.main.runtimeClasspath += sourceSets.csmc.output
+
+jar {
+    from sourceSets.csmc.output
 }
 
 processResources {
