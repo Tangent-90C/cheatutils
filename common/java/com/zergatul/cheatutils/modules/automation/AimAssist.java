@@ -414,6 +414,9 @@ public class AimAssist implements Module {
         if (living.getHealth() <= 0) {
             return "dead";
         }
+        if (!config.canTarget(entity)) {
+            return "not_target_type";
+        }
         if (entity.isSpectator()) {
             return "spectator";
         }

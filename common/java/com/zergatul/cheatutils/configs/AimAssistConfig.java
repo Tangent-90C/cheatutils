@@ -1,6 +1,11 @@
 package com.zergatul.cheatutils.configs;
 
+import com.zergatul.cheatutils.collections.ImmutableList;
 import com.zergatul.cheatutils.utils.MathUtils;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+
+import java.util.Objects;
 
 public class AimAssistConfig implements ModuleStateProvider, ValidatableConfig {
 
@@ -19,6 +24,7 @@ public class AimAssistConfig implements ModuleStateProvider, ValidatableConfig {
 
     public boolean aimCorrection;
     public String aimControlMode;
+    public ImmutableList<Class<?>> targetClasses;
     public String aimAt;
     public double range;
     public int rotationSpeed;
@@ -38,6 +44,8 @@ public class AimAssistConfig implements ModuleStateProvider, ValidatableConfig {
 
     public AimAssistConfig() {
         aimControlMode = ControlModeConfig;
+        // players only, so passive mobs like chickens are never picked up
+        targetClasses = ImmutableList.from(Player.class);
         aimAt = AimAtAuto;
         range = 128;
         rotationSpeed = 600;
@@ -70,8 +78,26 @@ public class AimAssistConfig implements ModuleStateProvider, ValidatableConfig {
         return ControlModeKey.equals(aimControlMode);
     }
 
+    /**
+     * Whether the entity is of a configured type. An empty list means "any living
+     * entity", so clearing every entry widens the filter instead of disabling it.
+     */
+    public boolean canTarget(Entity entity) {
+        if (targetClasses == null || targetClasses.size() == 0) {
+            return true;
+        }
+        for (Class<?> clazz : targetClasses) {
+            if (clazz != null && clazz.isInstance(entity)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Override
     public void validate() {
+        // classes become null when a mod that provided them is removed
+        targetClasses = targetClasses.removeIf(Objects::isNull);
         range = MathUtils.clamp(range, 1, 1024);
         rotationSpeed = MathUtils.clamp(rotationSpeed, 10, 3600);
         fov = MathUtils.clamp(fov, 1, 360);

@@ -111,6 +111,38 @@
                         visible entities are still attackable.
                     </div>
                 </fieldset>
+                <fieldset>
+                    <legend>
+                        Target Entities
+                    </legend>
+                    <div class="section-description">
+                        Only entities of the checked types are aimed at. Default is players only, so
+                        passive mobs are never picked up.
+                    </div>
+                    <div class="flex-row">
+                        <span class="field-description">Filter:</span>
+                        <input type="text" class="search" v-model="search">
+                    </div>
+                    <div class="target-class-list">
+                        <div v-for="entity in entityListFiltered" :key="entity.clazz" :title="classTooltip(entity.clazz)">
+                            <label class="switch-label">
+                                <input type="checkbox"
+                                    :checked="(config.targetClasses || []).includes(entity.clazz)"
+                                    @change="toggleTargetClass(entity.clazz)">
+                                <span>{{ classLabel(entity.clazz) }}</span>
+                            </label>
+                        </div>
+                        <div v-if="entityListFiltered.length == 0" class="section-description">
+                            No entities match the filter.
+                        </div>
+                    </div>
+                    <div class="section-description">
+                        <input type="checkbox" :checked="(config.targetClasses || []).length == 0" @change="clearTargetClasses()">
+                        <span>Target any living entity</span><br>
+                        Clear the checkbox above to aim at everything alive, which is how Aim Correction
+                        behaved before this filter existed.
+                    </div>
+                </fieldset>
                 <div class="flex-row">
                     <span class="field-description">Range:</span>
                     <input type="text" class="w3" v-model="config.range" @change="update()">
