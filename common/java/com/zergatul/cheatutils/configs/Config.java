@@ -71,6 +71,7 @@ public class Config {
     public MonacoEditorConfig monacoEditor = new MonacoEditorConfig();
     public StepUpConfig stepUp = new StepUpConfig();
     public AimAssistConfig aimAssist = new AimAssistConfig();
+    public CsmcNoRecoilConfig csmcNoRecoilConfig = new CsmcNoRecoilConfig();
 
     public Config() {
         esp = true;

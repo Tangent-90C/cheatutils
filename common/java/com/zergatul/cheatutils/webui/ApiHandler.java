@@ -685,6 +685,18 @@ public class ApiHandler implements HttpHandler {
             }
         });
 
+        apis.add(new SimpleConfigApi<>("csmc-no-recoil", CsmcNoRecoilConfig.class) {
+            @Override
+            protected CsmcNoRecoilConfig getConfig() {
+                return ConfigStore.instance.getConfig().csmcNoRecoilConfig;
+            }
+
+            @Override
+            protected void setConfig(CsmcNoRecoilConfig config) {
+                ConfigStore.instance.getConfig().csmcNoRecoilConfig = config;
+            }
+        });
+
         apis.add(new SimpleConfigApi<>("bob-hurt", BobHurtConfig.class) {
             @Override
             protected BobHurtConfig getConfig() {

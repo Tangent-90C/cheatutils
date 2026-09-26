@@ -1,7 +1,9 @@
 package com.zergatul.cheatutils.mixins.common;
 
+import com.zergatul.cheatutils.controllers.CsmcNoRecoilController;
 import com.zergatul.cheatutils.modules.esp.FreeCam;
 import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.BlockGetter;
 import org.spongepowered.asm.mixin.Mixin;
@@ -19,6 +21,12 @@ public abstract class MixinCamera {
     @Shadow(aliases = "Lnet/minecraft/client/Camera;setPosition(DDD)V")
     protected abstract void setPosition(double x, double t, double z);
 
+    @Shadow
+    public abstract float getYRot();
+
+    @Shadow
+    public abstract float getXRot();
+
     @Inject(
             at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;isPassenger()Z", ordinal = 0),
             method = "setup(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/world/entity/Entity;ZZF)V",
@@ -30,5 +38,17 @@ public abstract class MixinCamera {
             setPosition(controller.getX(), controller.getY(), controller.getZ());
             info.cancel();
         }
+    }
+
+    @Inject(
+            at = @At("TAIL"),
+            method = "setup(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/world/entity/Entity;ZZF)V")
+    private void onSetupTail(BlockGetter level, Entity entity, boolean detached, boolean mirrored, float particalTicks, CallbackInfo info) {
+        if (entity != Minecraft.getInstance().player || !CsmcNoRecoilController.instance.isActive()) {
+            return;
+        }
+        setRotation(
+                CsmcNoRecoilController.instance.removeYawOffset(getYRot()),
+                CsmcNoRecoilController.instance.removePitchOffset(getXRot()));
     }
 }

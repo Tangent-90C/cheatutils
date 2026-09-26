@@ -1,0 +1,15 @@
+<div class="module-main" v-if="config">
+    <div class="description">
+        Removes rotation offset applied to the view while the frame is rendered, such as shooter recoil. Set Amount below 100% to confirm the offset is really being removed.
+    </div>
+
+    <div class="module-sections">
+        <div>
+            <switch-checkbox v-model="config.enabled" @change="update()">Enabled</switch-checkbox>
+        </div>
+        <div>
+            <span class="field-description">Amount, %:</span>
+            <input type="number" min="0" max="100" class="w5" v-model="config.amount" @change="update()">
+        </div>
+    </div>
+</div>

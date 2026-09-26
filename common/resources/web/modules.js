@@ -435,6 +435,13 @@ module({
 });
 module({
     group: 'visuals',
+    name: 'CSMC No Recoil',
+    component: 'CsmcNoRecoil',
+    path: 'csmc-no-recoil',
+    tags: ['norecoil', 'recoil', 'csmc']
+});
+module({
+    group: 'visuals',
     name: 'No Weather',
     component: 'NoWeather',
     path: 'no-weather',

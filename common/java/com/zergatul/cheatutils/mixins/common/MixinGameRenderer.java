@@ -4,10 +4,13 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.zergatul.cheatutils.common.Events;
 import com.zergatul.cheatutils.common.events.GetFieldOfViewEvent;
 import com.zergatul.cheatutils.configs.ConfigStore;
+import com.zergatul.cheatutils.controllers.CsmcNoRecoilController;
 import com.zergatul.cheatutils.modules.esp.FreeCam;
 import net.minecraft.client.Camera;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.GameRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -55,6 +58,19 @@ public abstract class MixinGameRenderer {
     @Inject(at = @At("HEAD"), method = "render")
     private void onBeforeRender(DeltaTracker delta, boolean p_109096_, CallbackInfo info) {
         Events.RenderTickStart.trigger(delta);
+        if (ConfigStore.instance.getConfig().csmcNoRecoilConfig.enabled) {
+            CsmcNoRecoilController.instance.snapshot();
+        }
+    }
+
+    @Inject(at = @At("TAIL"), method = "render")
+    private void onAfterRender(DeltaTracker delta, boolean p_109096_, CallbackInfo info) {
+        LocalPlayer player = Minecraft.getInstance().player;
+        if (player == null || !CsmcNoRecoilController.instance.isActive()) {
+            return;
+        }
+        player.setYRot(CsmcNoRecoilController.instance.removeYawOffset(player.getYRot()));
+        player.setXRot(CsmcNoRecoilController.instance.removePitchOffset(player.getXRot()));
     }
 
     @Inject(at = @At("HEAD"), method = "bobHurt(Lcom/mojang/blaze3d/vertex/PoseStack;F)V", cancellable = true)
