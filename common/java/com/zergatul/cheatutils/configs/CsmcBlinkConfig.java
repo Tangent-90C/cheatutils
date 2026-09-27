@@ -9,6 +9,11 @@ public class CsmcBlinkConfig extends ModuleConfig implements ValidatableConfig {
     public boolean flushOnShoot;
     public boolean sendCurrentPosition;
     public boolean respawnRewind;
+    /**
+     * Only meaningful with {@link #respawnRewind}: replay the held buffer at the respawn itself,
+     * instead of leaving it until {@code csmcBlink.recall()} is called.
+     */
+    public boolean recallImmediately;
     public boolean releaseWhenStopped;
     /**
      * Ticks without movement before "Release When Stopped" fires. 5 ticks is a quarter of a second,
@@ -29,6 +34,7 @@ public class CsmcBlinkConfig extends ModuleConfig implements ValidatableConfig {
         flushOnShoot = true;
         sendCurrentPosition = true;
         respawnRewind = false;
+        recallImmediately = false;
         releaseWhenStopped = true;
         stillTicks = 5;
         debugBox = true;

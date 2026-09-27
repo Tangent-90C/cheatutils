@@ -34,9 +34,7 @@
                 ends up where you actually are instead of wherever the buffer stopped. Has no effect on
                 the releases that happen while running: every flush - the one at a shot, at a limit, and
                 after you stop - already reports the current position, because that is what the release
-                is for. A rewind held across a respawn is the exception: it is released without the
-                current position, because after a respawn that position is the respawn point the rewind
-                exists to undo.
+                is for.
             </div>
         </div>
         <div>
@@ -47,8 +45,17 @@
                 later with <b>csmcBlink.recall()</b>. That reports the positions the buffer was recorded
                 at without reporting where you just respawned, which drags you back to where you died
                 instead of leaving you at the spawn point. Needs a server that accepts the old position
-                as authoritative. Firing a shot releases it too, the same way - the first shot after a
-                respawn performs the rewind instead of doing nothing.
+                as authoritative.
+            </div>
+            <div>
+                <switch-checkbox v-model="config.recallImmediately" @change="update()">Recall Immediately</switch-checkbox>
+                <div class="description">
+                    Replay the held buffer the moment you respawn, instead of waiting for a keybound
+                    <b>csmcBlink.recall()</b>. You are pulled back to where you died as soon as the
+                    respawn happens, and buffering resumes straight after, so the shot flush and the
+                    rewind never interact. With this off the rewind waits for the script call, and while
+                    it waits the module is not buffering anything.
+                </div>
             </div>
         </div>
         <div>

@@ -310,39 +310,31 @@ public class CsmcBlinkController {
      * Releasing here puts the held history and the position claimed right now in front of that
      * dispatch, in the same frame, microseconds earlier, which is as early as it can get.
      * <p>
-     * A shot also supersedes a rewind. While a rewind is pending the module is not buffering - it is
-     * holding the buffer it recorded before the death on purpose, waiting for a recall - so this used
-     * to return early and the first shot after a respawn released nothing at all: the server kept the
-     * respawn position, which it is authoritative about, and dragged the player back there. Now the
-     * pending rewind is released the way {@link #recall()} releases it, buffer only, because the
-     * positions it holds were recorded by the player that died and the position you are standing in
-     * is the respawn point the rewind exists to undo. Reporting that alongside them would put the
-     * respawn point last, which is precisely the observed bug.
+     * This knows nothing about rewinds. A rewind is resolved on its own - at the respawn when Recall
+     * Immediately is on, or by {@link #recall()} otherwise - and while one is pending the module is
+     * not buffering anything, so there is nothing for a shot to release: the move packets are going
+     * out unheld and the server already has the position. Letting the shot reach into the rewind's
+     * buffer is what pinned players to the respawn point, because the position reported after the
+     * pre-death claims was the respawn point itself.
      */
     private void onBeforeUpdateDisplay() {
         CsmcBlinkConfig config = ConfigStore.instance.getConfig().csmcBlinkConfig;
-        if (mc.player == null || mc.player != trackedPlayer || !config.enabled) {
+        if (mc.player == null || mc.player != trackedPlayer || rewindPending) {
             return;
         }
-        // nothing is buffered while a rewind is pending, so armed is false - but the shot still has
-        // to go through, because the buffer the rewind holds is all there is to release
-        if (!armed && !rewindPending) {
+        if (!config.enabled || !armed) {
             return;
         }
         if (!config.flushOnShoot || !isFiring()) {
             return;
         }
-
-        boolean rewind = rewindPending;
-        boolean includeCurrentPosition = !rewind;
         if (config.debugLogging) {
-            logger.info("csmc-blink firing -> flush {} packets, drift={} playerPos={}/{}/{} rewind={} currentPosition={}",
+            logger.info("csmc-blink firing -> flush {} packets, drift={} playerPos={}/{}/{}",
                     packets.size(), round(getServerDistance()),
-                    round(mc.player.getX()), round(mc.player.getY()), round(mc.player.getZ()),
-                    rewind, includeCurrentPosition);
+                    round(mc.player.getX()), round(mc.player.getY()), round(mc.player.getZ()));
         }
         countRelease("firing");
-        release(true, includeCurrentPosition);
+        release(true, true);
     }
 
     /** What the shot flush is looking at, so a log line says which of its conditions is failing. */
@@ -607,6 +599,7 @@ public class CsmcBlinkController {
     private void handlePlayerSwap(CsmcBlinkConfig config) {
         boolean holding = rewindArmed && !packets.isEmpty();
         rewindArmed = false;
+        boolean recalled = false;
         if (holding) {
             // stop buffering and keep what the buffer has: the claims the client is about to make
             // for the position it was moved to are what would erase the old ones if they were
@@ -617,12 +610,20 @@ public class CsmcBlinkController {
             if (config.debugLogging) {
                 logger.info("csmc-blink holding {} packets recorded before the respawn", packets.size());
             }
+            if (config.recallImmediately) {
+                // recalled here, before the tick end can start recording the post-death position:
+                // the held packets still describe where you died and nothing has been claimed since
+                recall();
+                recalled = true;
+            }
         } else {
             onAbort();
         }
 
         trackedPlayer = mc.player;
-        setServerPosition(mc.player.getX(), mc.player.getY(), mc.player.getZ());
+        if (!recalled) {
+            setServerPosition(mc.player.getX(), mc.player.getY(), mc.player.getZ());
+        }
         if (config.enabled && !holding) {
             arm();
         }
