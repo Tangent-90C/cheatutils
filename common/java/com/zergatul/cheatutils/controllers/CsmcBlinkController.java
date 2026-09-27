@@ -2,6 +2,7 @@ package com.zergatul.cheatutils.controllers;
 
 import com.zergatul.cheatutils.common.Events;
 import com.zergatul.cheatutils.common.events.RenderWorldLastEvent;
+import com.zergatul.cheatutils.compatibility.csmc.CsmcBallistics;
 import com.zergatul.cheatutils.configs.ConfigStore;
 import com.zergatul.cheatutils.configs.CsmcBlinkConfig;
 import com.zergatul.cheatutils.modules.utilities.RenderUtilities;
@@ -18,6 +19,8 @@ import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.apache.logging.log4j.LogManager;
@@ -34,12 +37,21 @@ import java.util.Map;
  * Holds outgoing movement while you stay where the server thinks you are, and pushes the buffer out
  * the moment a shot leaves - so the server sees you where you stand before it resolves the shot.
  * <p>
- * CSMC does not report a shot with a packet of its own. It cancels the vanilla attack path and runs
- * its own fire handler, which ends with
+ * CSMC does not report a shot with a packet of its own: it cancels the vanilla attack path and runs
+ * its own fire handler. What that handler leaves behind changed with the mod version:
+ * <ul>
+ * <li>5.14 and earlier ended it with
  * {@code ServerboundPlayerActionPacket(Action.SWAP_ITEM_WITH_OFFHAND)} - the packet vanilla sends
- * when you press F to swap hands, reused as the fire signal. That is what the module watches for,
- * together with the rest of the action family, since weapons that stay on the vanilla path still
- * send an interact or a use-item packet.
+ * when you press F to swap hands, reused as the fire signal.</li>
+ * <li>6.0 builds no packet at all anywhere in the jar (no action, interact, use or swing packet, not
+ * even a custom payload) and swallows the vanilla mouse button while a gun is held, so there is no
+ * outgoing packet to watch. What is left is the moment the shot is decided, which is a fire key held
+ * down with a CSMC gun in hand - the same condition CSMC's own fire gate tests. The buffer is
+ * released on that tick, which is still before {@code LocalPlayer.tick()} builds the next move
+ * packet, so the server has your real position for the shot.</li>
+ * </ul>
+ * Both are watched, together with the rest of the action family, since weapons that stay on the
+ * vanilla path still send an interact or a use-item packet.
  * <p>
  * The buffer is released through {@link NetworkPacketsController} with handlers stopped, the same way
  * {@code Blink} releases its buffer, so the held packets are not buffered again on the way out. The
@@ -227,6 +239,17 @@ public class CsmcBlinkController {
         if (config.enabled && !rewindPending) {
             if (!armed) {
                 arm();
+            } else if (config.flushOnShoot && isFiring()) {
+                // CSMC 6.0 leaves the shot in no packet at all, so the release is driven from here
+                // instead: one flush per tick while the fire key is down with a gun in hand. This runs
+                // after the move packet of the tick has been held, so the released buffer plus the
+                // fresh current-position packet leave the server current for the tick the shot is in
+                if (config.debugLogging) {
+                    logger.info("csmc-blink firing -> flush {} packets, drift={} playerPos={}/{}/{}",
+                            packets.size(), round(getServerDistance()),
+                            round(mc.player.getX()), round(mc.player.getY()), round(mc.player.getZ()));
+                }
+                release(true, true);
             } else if (limitReached(config)) {
                 // the limits cap how far the buffer may drift, they do not end the session: empty the
                 // buffer and keep buffering from the position you are in now
@@ -367,8 +390,10 @@ public class CsmcBlinkController {
 
     /**
      * Action packets: anything the player does that the server resolves against the position it
-     * has been told about. The shot itself is the offhand swap CSMC fires for every weapon, and the
-     * rest of the family covers weapons that still run on the vanilla attack and item-use paths.
+     * has been told about. Up to CSMC 5.14 the shot itself was the offhand swap CSMC fired for every
+     * weapon, and the rest of the family covers weapons that still run on the vanilla attack and
+     * item-use paths. CSMC 6.0 sends none of these for a shot, so the release is driven from the tick
+     * handler instead - see {@link #onClientTickEnd()}.
      * <p>
      * Custom payloads are deliberately not here, even though other shooters use them: CSMC sends
      * them tens of times per second for its own state sync, so treating them as an action releases
@@ -383,6 +408,27 @@ public class CsmcBlinkController {
                 || packet instanceof ServerboundUseItemPacket
                 || packet instanceof ServerboundUseItemOnPacket
                 || packet instanceof ServerboundSwingPacket;
+    }
+
+    /**
+     * The moment CSMC 6.0 decides to fire: a fire key held down with a CSMC gun in the main hand. That
+     * is the same condition CSMC's own fire gate tests. The buffer is flushed at the end of that tick,
+     * which is after this tick's move packet has already been held, so the release carries the buffered
+     * history plus a fresh packet for the position you are in now - the server is current by the end of
+     * the tick the shot was made in, which is the closest a packet-less shot can get.
+     * The gun is recognised by the prediction key on the item, which does not depend on the descriptor
+     * layout, so a changed blob still identifies the weapon.
+     */
+    private static boolean isFiring() {
+        Minecraft mc = Minecraft.getInstance();
+        LocalPlayer player = mc.player;
+        if (player == null) {
+            return false;
+        }
+        if (!mc.options.keyAttack.isDown() && !mc.options.keyUse.isDown()) {
+            return false;
+        }
+        return CsmcBallistics.isWeapon(player.getItemInHand(InteractionHand.MAIN_HAND));
     }
 
     /**

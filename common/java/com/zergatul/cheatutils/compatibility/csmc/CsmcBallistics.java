@@ -51,6 +51,22 @@ public final class CsmcBallistics {
     }
 
     /**
+     * True when the item carries the weapon prediction key, i.e. it is a CSMC gun. Deliberately only
+     * checks the key - not the blob layout - so a mod update that changes the descriptor degrades the
+     * drop compensation while still identifying the weapon.
+     */
+    public static boolean isWeapon(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
+        if (customData == null) {
+            return false;
+        }
+        return !customData.copyTag().getStringOr(PREDICTION_KEY, "").isBlank();
+    }
+
+    /**
      * Ballistics of the given weapon, or null when this is not a CSMC gun or
      * the prediction blob cannot be parsed with the layout above.
      */
