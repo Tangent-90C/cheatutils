@@ -53,6 +53,13 @@ public abstract class MixinMinecraft {
         Events.Close.trigger();
     }
 
+    @Inject(at = @At("HEAD"), method = "runTick(Z)V")
+    private void onBeforeRunTick(CallbackInfo info) {
+        if (this.isGameLoadFinished()) {
+            Events.BeforeProcessGameTasks.trigger();
+        }
+    }
+
     @Inject(at = @At("HEAD"), method = "handleKeybinds()V")
     private void onBeforeHandleKeyBindings(CallbackInfo info) {
         Events.BeforeHandleKeyBindings.trigger();

@@ -47,9 +47,9 @@ import java.util.Map;
  * <li>6.0 builds no packet at all anywhere in the jar (no action, interact, use or swing packet, not
  * even a custom payload) and swallows the vanilla mouse button while a gun is held, so there is no
  * outgoing packet to watch. What is left is the moment the shot is decided, which is the fire key
- * being held. The buffer is released on that tick, which is still before
- * {@code LocalPlayer.tick()} builds the next move packet, so the server has your real position for
- * the shot.</li>
+ * being held. The buffer is released at the head of the frame, before the frame's queued tasks are
+ * dispatched, because that is the moment the shot leaves - see
+ * {@link #onBeforeProcessGameTasks()}.</li>
  * </ul>
  * Both are watched, together with the rest of the action family, since weapons that stay on the
  * vanilla path still send an interact or a use-item packet.
@@ -134,6 +134,7 @@ public class CsmcBlinkController {
     private CsmcBlinkController() {
         NetworkPacketsController.instance.addClientPacketHandler(this::onClientPacket);
         NetworkPacketsController.instance.addServerPacketHandler(this::onServerPacket);
+        Events.BeforeProcessGameTasks.add(this::onBeforeProcessGameTasks);
         Events.ClientTickEnd.add(this::onClientTickEnd);
         Events.ClientPlayerLoggingOut.add(this::onAbort);
         Events.DimensionChange.add(this::onAbort);
@@ -250,18 +251,6 @@ public class CsmcBlinkController {
         if (config.enabled && !rewindPending) {
             if (!armed) {
                 arm();
-            } else if (config.flushOnShoot && isFiring()) {
-                // CSMC 6.0 leaves the shot in no packet at all, so the release is driven from here: one
-                // flush per tick while the fire key is down with a gun in hand. This runs after the move
-                // packet of the tick has been held, so the released buffer plus the fresh current-position
-                // packet leave the server current for the tick the shot is in
-                if (config.debugLogging) {
-                    logger.info("csmc-blink firing -> flush {} packets, drift={} playerPos={}/{}/{}",
-                            packets.size(), round(getServerDistance()),
-                            round(mc.player.getX()), round(mc.player.getY()), round(mc.player.getZ()));
-                }
-                countRelease("firing");
-                release(true, true);
             } else if (limitReached(config)) {
                 // the limits cap how far the buffer may drift, they do not end the session: empty the
                 // buffer and keep buffering from the position you are in now
@@ -299,6 +288,39 @@ public class CsmcBlinkController {
         }
 
         log();
+    }
+
+    /**
+     * The frame head, before the queued game tasks are dispatched. CSMC 6.0 leaves the shot in no
+     * packet at all, so the release is driven from here.
+     * <p>
+     * This moment is the whole point: the client turns a mouse press into a queued task and runs the
+     * task list at the top of {@code Minecraft.runTick()}, <em>before</em> {@code tick()} - and CSMC
+     * decides the shot inside that task. Releasing anywhere in the tick is therefore always one shot
+     * late: the first bullet of a press is dispatched before the tick it is often assumed to belong
+     * to, so the server resolves it against whatever the buffer was still holding, and the shots
+     * after it in the same burst already had the release, which is exactly why only the first one
+     * looked wrong. Releasing here puts the held history and the position claimed right now in front
+     * of the shot, in the same frame, in the order the server needs.
+     */
+    private void onBeforeProcessGameTasks() {
+        CsmcBlinkConfig config = ConfigStore.instance.getConfig().csmcBlinkConfig;
+        if (mc.player == null || mc.player != trackedPlayer || rewindPending) {
+            return;
+        }
+        if (!config.enabled || !armed) {
+            return;
+        }
+        if (!config.flushOnShoot || !isFiring()) {
+            return;
+        }
+        if (config.debugLogging) {
+            logger.info("csmc-blink firing -> flush {} packets, drift={} playerPos={}/{}/{}",
+                    packets.size(), round(getServerDistance()),
+                    round(mc.player.getX()), round(mc.player.getY()), round(mc.player.getZ()));
+        }
+        countRelease("firing");
+        release(true, true);
     }
 
     /** What the shot flush is looking at, so a log line says which of its conditions is failing. */
@@ -453,7 +475,7 @@ public class CsmcBlinkController {
      * told about. Up to CSMC 5.14 the shot itself was the offhand swap CSMC fired for every weapon;
      * the interact and swing packets cover weapons that still run on the vanilla attack path - vanilla
      * sends one of each per click. CSMC 6.0 sends none of these for a shot, so the release is driven
-     * from the tick handler instead - see {@link #onClientTickEnd()}.
+     * from the frame head instead - see {@link #onBeforeProcessGameTasks()}.
      * <p>
      * The use-item family is deliberately absent. {@code ServerboundUseItemPacket} and
      * {@code ServerboundUseItemOnPacket} are not discrete actions: vanilla sends them every tick for as
