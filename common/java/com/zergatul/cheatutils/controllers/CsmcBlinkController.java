@@ -3,7 +3,6 @@ package com.zergatul.cheatutils.controllers;
 import com.zergatul.cheatutils.common.Events;
 import com.zergatul.cheatutils.common.events.RenderWorldLastEvent;
 import com.zergatul.cheatutils.compatibility.csmc.CsmcBallistics;
-import com.zergatul.cheatutils.compatibility.csmc.CsmcShotSignalBridge;
 import com.zergatul.cheatutils.configs.ConfigStore;
 import com.zergatul.cheatutils.configs.CsmcBlinkConfig;
 import com.zergatul.cheatutils.modules.utilities.RenderUtilities;
@@ -113,9 +112,6 @@ public class CsmcBlinkController {
     // diagnostics: what came back from the server, sampled once a second. A teleport or a payload
     // right after a flush is the server disagreeing with the position it was just told about
     private final Map<String, Integer> inboundTypes = new LinkedHashMap<>();
-
-    // last shot timestamp the CSMC fire handler reported, so one release per shot instead of one per tick
-    private long lastShotStamp;
 
     // last position that actually reached the server - what the server believes about you
     private boolean serverPositionKnown;
@@ -243,22 +239,11 @@ public class CsmcBlinkController {
         if (config.enabled && !rewindPending) {
             if (!armed) {
                 arm();
-            } else if (config.flushOnShoot && shotHappened()) {
-                // one release per shot. On 5.14 the shot arrived as a packet and this branch never ran; on
-                // 6.0 the fire handler is hooked and this is the release for every shot of an automatic
-                // weapon, which produces no packet at all. Runs after the move packet of the tick has been
-                // held, so the buffer plus a fresh current-position packet leave the server current for the
-                // tick the shot is in
-                if (config.debugLogging) {
-                    logger.info("csmc-blink shot -> flush {} packets, drift={} playerPos={}/{}/{}",
-                            packets.size(), round(getServerDistance()),
-                            round(mc.player.getX()), round(mc.player.getY()), round(mc.player.getZ()));
-                }
-                release(true, true);
             } else if (config.flushOnShoot && isFiring()) {
-                // fallback for a CSMC that no longer exposes a hooked fire handler: flushing every tick
-                // while the fire key is down with a gun in hand is coarser than the signal above - it also
-                // fires when the gun cannot fire - but it still leaves the server current while shooting
+                // CSMC 6.0 leaves the shot in no packet at all, so the release is driven from here: one
+                // flush per tick while the fire key is down with a gun in hand. This runs after the move
+                // packet of the tick has been held, so the released buffer plus the fresh current-position
+                // packet leave the server current for the tick the shot is in
                 if (config.debugLogging) {
                     logger.info("csmc-blink firing -> flush {} packets, drift={} playerPos={}/{}/{}",
                             packets.size(), round(getServerDistance()),
@@ -423,25 +408,6 @@ public class CsmcBlinkController {
                 || packet instanceof ServerboundUseItemPacket
                 || packet instanceof ServerboundUseItemOnPacket
                 || packet instanceof ServerboundSwingPacket;
-    }
-
-    /**
-     * True when the CSMC fire handler hooked by {@code MixinCsmcShot} reported a shot since the last tick.
-     * The handler lives in the fabric-only csmc source set, so it is read by reflection: on a loader without
-     * that source set the class is absent and the caller falls back to the key-held check. The value is a
-     * timestamp in milliseconds, so a shot between two ticks survives the tick boundary.
-     */
-    private boolean shotHappened() {
-        try {
-            long stamp = CsmcShotSignalBridge.lastShotAt();
-            if (stamp == lastShotStamp) {
-                return false;
-            }
-            lastShotStamp = stamp;
-            return stamp != 0;
-        } catch (RuntimeException e) {
-            return false;
-        }
     }
 
     /**

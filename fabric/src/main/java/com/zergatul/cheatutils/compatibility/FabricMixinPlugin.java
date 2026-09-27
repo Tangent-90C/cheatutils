@@ -27,9 +27,7 @@ public class FabricMixinPlugin extends MixinPlugin {
             // 6.0: shot direction, which applies the recoil punch through b$5pg
             "MixinCsmcSpread", new String[] {"me/fadeorite/csmcmod/b$5os.class", "me/fadeorite/csmcmod/b$5pg"},
             // 5.14 and earlier: shot direction, whose spread magnitude comes from W
-            "MixinCsmcSpreadLegacy", new String[] {"me/fadeorite/csmcmod/b$2j.class", "me/fadeorite/csmcmod/W"},
-            // 6.0: the fire handler, which is the only caller of the trajectory computation b$5qz
-            "MixinCsmcShot", new String[] {"me/fadeorite/csmcmod/b$5qu.class", "me/fadeorite/csmcmod/b$5qz"});
+            "MixinCsmcSpreadLegacy", new String[] {"me/fadeorite/csmcmod/b$2j.class", "me/fadeorite/csmcmod/W"});
 
     private final Logger logger = LogManager.getLogger(FabricMixinPlugin.class);
 
@@ -120,8 +118,8 @@ public class FabricMixinPlugin extends MixinPlugin {
             }
         }
         if (csmcInstalled) {
-            logger.warn("CSMCMod is installed but {} was not found in it. The matching CSMC options stay disabled.",
-                    entry);
+            logger.warn("CSMCMod is installed but {} (referencing {}) was not found in it. "
+                    + "The matching CSMC options stay disabled.", entry, marker);
         }
         return false;
     }
