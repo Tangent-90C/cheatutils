@@ -10,6 +10,13 @@ public class CsmcBlinkConfig extends ModuleConfig implements ValidatableConfig {
     public boolean sendCurrentPosition;
     public boolean respawnRewind;
     public boolean releaseWhenStopped;
+    /**
+     * Ticks without movement before "Release When Stopped" fires. 5 ticks is a quarter of a second,
+     * which is what the hardcoded default was. An int is right here: the value counts ticks and 0 has
+     * no meaning for it, so {@link #validate()} clamps to 1 rather than leaving a 0 that would release
+     * on the very first tick of standing still.
+     */
+    public int stillTicks;
     public boolean debugBox;
     public Color debugBoxColor;
     public boolean debugLogging;
@@ -23,6 +30,7 @@ public class CsmcBlinkConfig extends ModuleConfig implements ValidatableConfig {
         sendCurrentPosition = true;
         respawnRewind = false;
         releaseWhenStopped = true;
+        stillTicks = 5;
         debugBox = true;
         debugBoxColor = new Color(0x00E5FF);
         debugLogging = false;
@@ -34,5 +42,6 @@ public class CsmcBlinkConfig extends ModuleConfig implements ValidatableConfig {
     public void validate() {
         maxPackets = MathUtils.clamp(maxPackets, 0, 1000);
         maxDistance = MathUtils.clamp(maxDistance, 0, 100);
+        stillTicks = MathUtils.clamp(stillTicks, 1, 200);
     }
 }

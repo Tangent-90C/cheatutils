@@ -4,8 +4,8 @@
         the moment an action packet leaves, so the server sees you where you stand before it resolves the
         shot. Use <b>csmcBlink.enable()</b> / <b>csmcBlink.disable()</b> as keybinds, or toggle Enabled
         here. While enabled you keep moving on the client only, so everything the server resolves comes
-        from the last released position. Standing still releases what is held a fifth of a second later:
-        the stutter comes from movement, not from standing in one place.
+        from the last released position. Standing still releases what is held once the tick threshold
+        is reached: the stutter comes from movement, not from standing in one place.
     </div>
 
     <div class="module-sections">
@@ -48,11 +48,14 @@
         </div>
         <div>
             <switch-checkbox v-model="config.releaseWhenStopped" @change="update()">Release When Stopped</switch-checkbox>
+            <span class="field-description">Delay, ticks:</span>
+            <input type="number" min="1" max="200" class="w5" v-model="config.stillTicks" @change="update()">
             <div class="description">
-                Release the buffer shortly after you stop moving, so the box comes back onto you. This
-                does not touch the flush that fires on a shot - that one always runs, and with it the
-                server is told your position before the shot leaves whether you were moving or not.
-                Turn this off to keep the leftover offset while standing still.
+                Release the buffer after this many ticks of standing in one place, so the box comes back
+                onto you. 5 ticks is a quarter of a second. This does not touch the flush that fires on
+                a shot - that one always runs, and with it the server is told your position before the
+                shot leaves whether you were moving or not. Turn this off to keep the leftover offset
+                while standing still.
             </div>
         </div>
         <div>

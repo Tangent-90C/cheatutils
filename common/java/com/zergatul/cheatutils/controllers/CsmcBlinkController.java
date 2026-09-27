@@ -76,10 +76,10 @@ public class CsmcBlinkController {
     private boolean releasing;
 
     // how long the position the buffer ends with has been the position you are standing in: holding
-    // movement you are not making only leaves the box stuck behind you, so it is released.
-    // The shot flush is a separate path and does not depend on this
+    // movement you are not making only leaves the box stuck behind you, so it is released. The
+    // threshold is config.stillTicks, so it can be tuned per fight instead of being a fifth of a
+    // second forever. The shot flush is a separate path and does not depend on this
     private int stillTicks;
-    private static final int STILL_TICKS_TO_RELEASE = 5;
 
     // Packets this controller released, kept by identity so they are not buffered again when some
     // other layer replays them. CSMC's outbound jitter queue re-sends delayed packets through
@@ -275,7 +275,7 @@ public class CsmcBlinkController {
                 // nothing new is moving into the buffer, so what it holds is only the leftover offset
                 // from the last run - the stutter comes from movement, not from standing still, and
                 // holding the rest just keeps the debug box behind you
-                if (++stillTicks >= STILL_TICKS_TO_RELEASE) {
+                if (++stillTicks >= config.stillTicks) {
                     if (config.debugLogging) {
                         logger.info("csmc-blink stopped -> flush {} packets, drift={}",
                                 packets.size(), round(getServerDistance()));
