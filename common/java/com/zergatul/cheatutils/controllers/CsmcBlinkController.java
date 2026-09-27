@@ -2,12 +2,12 @@ package com.zergatul.cheatutils.controllers;
 
 import com.zergatul.cheatutils.common.Events;
 import com.zergatul.cheatutils.common.events.RenderWorldLastEvent;
-import com.zergatul.cheatutils.compatibility.csmc.CsmcBallistics;
 import com.zergatul.cheatutils.configs.ConfigStore;
 import com.zergatul.cheatutils.configs.CsmcBlinkConfig;
 import com.zergatul.cheatutils.modules.utilities.RenderUtilities;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
@@ -46,10 +46,10 @@ import java.util.Map;
  * when you press F to swap hands, reused as the fire signal.</li>
  * <li>6.0 builds no packet at all anywhere in the jar (no action, interact, use or swing packet, not
  * even a custom payload) and swallows the vanilla mouse button while a gun is held, so there is no
- * outgoing packet to watch. What is left is the moment the shot is decided, which is a fire key held
- * down with a CSMC gun in hand - the same condition CSMC's own fire gate tests. The buffer is
- * released on that tick, which is still before {@code LocalPlayer.tick()} builds the next move
- * packet, so the server has your real position for the shot.</li>
+ * outgoing packet to watch. What is left is the moment the shot is decided, which is the fire key
+ * being held. The buffer is released on that tick, which is still before
+ * {@code LocalPlayer.tick()} builds the next move packet, so the server has your real position for
+ * the shot.</li>
  * </ul>
  * Both are watched, together with the rest of the action family, since weapons that stay on the
  * vanilla path still send an interact or a use-item packet.
@@ -308,9 +308,18 @@ public class CsmcBlinkController {
             return "noplayer";
         }
         long handle = mc.getWindow().getWindow();
-        return "attack=" + (mc.options.keyAttack.isDown() || GLFW.glfwGetMouseButton(handle, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS)
-                + " use=" + (mc.options.keyUse.isDown() || GLFW.glfwGetMouseButton(handle, GLFW.GLFW_MOUSE_BUTTON_RIGHT) == GLFW.GLFW_PRESS)
-                + " weapon=" + CsmcBallistics.isWeapon(mc.player.getItemInHand(InteractionHand.MAIN_HAND));
+        return "attack=" + (mc.options.keyAttack.isDown()
+                || GLFW.glfwGetMouseButton(handle, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS)
+                + " item=" + mainHandItem();
+    }
+
+    private static String mainHandItem() {
+        Minecraft mc = Minecraft.getInstance();
+        ItemStack stack = mc.player.getItemInHand(InteractionHand.MAIN_HAND);
+        if (stack.isEmpty()) {
+            return "empty";
+        }
+        return BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
     }
 
     private void countRelease(String reason) {
@@ -479,39 +488,42 @@ public class CsmcBlinkController {
     }
 
     /**
-     * The moment CSMC 6.0 decides to fire: a fire key held down with a CSMC gun in the main hand. That
-     * is the same condition CSMC's own fire gate tests. The buffer is flushed at the end of that tick,
-     * which is after this tick's move packet has already been held, so the release carries the buffered
-     * history plus a fresh packet for the position you are in now - the server is current by the end of
-     * the tick the shot was made in, which is the closest a packet-less shot can get.
-     * The gun is recognised by the prediction key on the item, which does not depend on the descriptor
-     * layout, so a changed blob still identifies the weapon.
+     * The fire key is held down. That is the only condition that survives CSMC 6.0, and it is also
+     * the simplest thing to get right: CSMC cancels the vanilla mouse callback itself, so the key is
+     * read straight from GLFW instead of trusting the bound-key state.
+     * <p>
+     * The held item is not tested. A CSMC gun is recognised neither by the registry namespace nor by
+     * the prediction key once 6.0 moved the descriptor into an on-disk cache, so a test on the item
+     * silently went dead and the shot flush stopped happening at all - the server was never told
+     * where you were standing while you fired. Left clicks that are not shots - mining, hitting an
+     * entity - flush anyway, through the action packets vanilla still sends for them, so nothing new
+     * is released by dropping the test.
      */
     private static boolean isFiring() {
-        Minecraft mc = Minecraft.getInstance();
-        LocalPlayer player = mc.player;
-        if (player == null) {
-            return false;
-        }
-        if (!fireKeyHeld(mc)) {
-            return false;
-        }
-        return CsmcBallistics.isWeapon(player.getItemInHand(InteractionHand.MAIN_HAND));
+        return fireKeyHeld(Minecraft.getInstance());
     }
 
     /**
-     * Vanilla's bound-key state is not enough on its own: while a gun is in hand CSMC consumes the
-     * mouse button itself, so the vanilla callback never runs, KeyMapping never sees the press and
-     * keyAttack.isDown() stays false the whole time you hold the trigger. The raw GLFW button state
-     * still tells the truth, so both are checked.
+     * The fire key is the attack key. Vanilla's bound-key state on its own is not enough: while a
+     * gun is in hand CSMC consumes the mouse button itself, so the vanilla callback never runs,
+     * KeyMapping never sees the press and keyAttack.isDown() stays false the whole time the trigger
+     * is held. The raw GLFW button state still tells the truth, so both are checked.
+     * <p>
+     * The use key is deliberately absent: aiming a gun holds it down for the whole fight, and
+     * flushing on it would empty the buffer for as long as you aim. An open screen is excluded too -
+     * clicking in an inventory or a chest is not firing.
      */
     private static boolean fireKeyHeld(Minecraft mc) {
-        if (mc.options.keyAttack.isDown() || mc.options.keyUse.isDown()) {
+        if (mc.screen != null) {
+            return false;
+        }
+        if (mc.options.keyAttack.isDown()) {
             return true;
         }
-        long handle = mc.getWindow().getWindow();
-        return GLFW.glfwGetMouseButton(handle, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS
-                || GLFW.glfwGetMouseButton(handle, GLFW.GLFW_MOUSE_BUTTON_RIGHT) == GLFW.GLFW_PRESS;
+        if (!mc.isWindowActive()) {
+            return false;
+        }
+        return GLFW.glfwGetMouseButton(mc.getWindow().getWindow(), GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
     }
 
     /**
