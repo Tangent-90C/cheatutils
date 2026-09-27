@@ -97,6 +97,10 @@ public class CsmcBlinkController {
     private boolean rewindArmed;
     private boolean rewindPending;
 
+    // diagnostics: which path emptied the buffer, sampled once a second. Every release path counts
+    // itself here, so the summary line says where the buffer went instead of leaving it to inference
+    private final Map<String, Integer> releaseReasons = new LinkedHashMap<>();
+
     // diagnostics: what the packet handler actually did, sampled once a second
     private int heldPackets;
     private int passedPackets;
@@ -249,6 +253,7 @@ public class CsmcBlinkController {
                             packets.size(), round(getServerDistance()),
                             round(mc.player.getX()), round(mc.player.getY()), round(mc.player.getZ()));
                 }
+                countRelease("firing");
                 release(true, true);
             } else if (limitReached(config)) {
                 // the limits cap how far the buffer may drift, they do not end the session: empty the
@@ -257,6 +262,7 @@ public class CsmcBlinkController {
                     logger.info("csmc-blink limit -> flush {} packets, drift={}",
                             packets.size(), round(getServerDistance()));
                 }
+                countRelease("limit");
                 release(true, true);
             } else if (config.releaseWhenStopped && stoppedMoving()) {
                 // nothing new is moving into the buffer, so what it holds is only the leftover offset
@@ -267,16 +273,23 @@ public class CsmcBlinkController {
                         logger.info("csmc-blink stopped -> flush {} packets, drift={}",
                                 packets.size(), round(getServerDistance()));
                     }
+                    countRelease("stopped");
                     release(true, true);
                 }
             } else {
                 stillTicks = 0;
             }
         } else if (armed) {
+            countRelease("disabled");
             release();
         }
 
         log();
+    }
+
+    private void countRelease(String reason) {
+        releaseReasons.merge(reason, 1, Integer::sum);
+        releases++;
     }
 
     private void log() {
@@ -286,12 +299,14 @@ public class CsmcBlinkController {
         }
 
         logTimer = 0;
-        logger.info("csmc-blink armed={} enabled={} buffer={} rewind={} held/s={} passed/s={} releases/s={} drift={} serverPos={}/{}/{} packets={} inbound={}",
+        logger.info("csmc-blink armed={} enabled={} buffer={} rewind={} held/s={} passed/s={} releases/s={} drift={} serverPos={}/{}/{} releases={} packets={} inbound={}",
                 armed, config.enabled, packets.size(), rewindPending, heldPackets, passedPackets, releases,
-                round(getServerDistance()), round(serverX), round(serverY), round(serverZ), packetTypes, inboundTypes);
+                round(getServerDistance()), round(serverX), round(serverY), round(serverZ), releaseReasons,
+                packetTypes, inboundTypes);
         heldPackets = 0;
         passedPackets = 0;
         releases = 0;
+        releaseReasons.clear();
         packetTypes.clear();
         inboundTypes.clear();
     }
@@ -347,9 +362,10 @@ public class CsmcBlinkController {
                 // here would leave the next shot unresolved and take the debug box with it
                 if (config.debugLogging) {
                     logger.info("csmc-blink action {} -> flush {} packets, drift={} playerPos={}/{}/{}",
-                            packet.getClass().getSimpleName(), packets.size(), round(getServerDistance()),
+                            describeAction(packet), packets.size(), round(getServerDistance()),
                             round(mc.player.getX()), round(mc.player.getY()), round(mc.player.getZ()));
                 }
+                countRelease("action");
                 release(true, true);
                 if (config.debugLogging) {
                     logger.info("csmc-blink flushed -> serverPos={}/{}/{} gap={}",
@@ -397,25 +413,42 @@ public class CsmcBlinkController {
     }
 
     /**
-     * Action packets: anything the player does that the server resolves against the position it
-     * has been told about. Up to CSMC 5.14 the shot itself was the offhand swap CSMC fired for every
-     * weapon, and the rest of the family covers weapons that still run on the vanilla attack and
-     * item-use paths. CSMC 6.0 sends none of these for a shot, so the release is driven from the tick
-     * handler instead - see {@link #onClientTickEnd()}.
+     * Action packets: what the player does that the server resolves against the position it has been
+     * told about. Up to CSMC 5.14 the shot itself was the offhand swap CSMC fired for every weapon;
+     * the interact and swing packets cover weapons that still run on the vanilla attack path - vanilla
+     * sends one of each per click. CSMC 6.0 sends none of these for a shot, so the release is driven
+     * from the tick handler instead - see {@link #onClientTickEnd()}.
      * <p>
-     * Custom payloads are deliberately not here, even though other shooters use them: CSMC sends
-     * them tens of times per second for its own state sync, so treating them as an action releases
-     * the buffer on every tick and the drift never grows.
+     * The use-item family is deliberately absent. {@code ServerboundUseItemPacket} and
+     * {@code ServerboundUseItemOnPacket} are not discrete actions: vanilla sends them every tick for as
+     * long as an item is in use - aiming a gun, drawing a bow, eating - so treating them as an action
+     * flushes the buffer the whole time and the drift never grows past a block. That is the same trap
+     * the custom payloads fall into, and a live run proved it: those two packets were the only flush
+     * triggers firing while the player ran with a gun in hand, at a rate of thousands of releases per
+     * second when they flooded.
      * <p>
-     * Bookkeeping packets - movement, keep-alive, hotbar switches, chat - are rejected for the same
-     * reason: they either carry the position themselves or happen all the time.
+     * Bookkeeping packets - movement, keep-alive, tick-end, input, hotbar switches, chat, and the
+     * custom payloads CSMC uses for its own state sync tens of times a second - are rejected for the
+     * same reason: they either carry the position themselves or happen all the time.
      */
     private static boolean isFlushTrigger(Packet<?> packet) {
         return packet instanceof ServerboundPlayerActionPacket
                 || packet instanceof ServerboundInteractPacket
-                || packet instanceof ServerboundUseItemPacket
-                || packet instanceof ServerboundUseItemOnPacket
                 || packet instanceof ServerboundSwingPacket;
+    }
+
+    /** Debug lines print intermediary class names otherwise, which nobody can read in a log. */
+    private static String describeAction(Packet<?> packet) {
+        if (packet instanceof ServerboundPlayerActionPacket) {
+            return "PlayerAction(" + ((ServerboundPlayerActionPacket) packet).getAction() + ")";
+        }
+        if (packet instanceof ServerboundInteractPacket) {
+            return "Interact";
+        }
+        if (packet instanceof ServerboundSwingPacket) {
+            return "Swing";
+        }
+        return packet.getClass().getSimpleName();
     }
 
     /**
