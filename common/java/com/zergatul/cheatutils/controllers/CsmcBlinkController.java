@@ -253,12 +253,20 @@ public class CsmcBlinkController {
             } else if (limitReached(config)) {
                 // the limits cap how far the buffer may drift, they do not end the session: empty the
                 // buffer and keep buffering from the position you are in now
+                if (config.debugLogging) {
+                    logger.info("csmc-blink limit -> flush {} packets, drift={}",
+                            packets.size(), round(getServerDistance()));
+                }
                 release(true, true);
             } else if (config.releaseWhenStopped && stoppedMoving()) {
                 // nothing new is moving into the buffer, so what it holds is only the leftover offset
                 // from the last run - the stutter comes from movement, not from standing still, and
                 // holding the rest just keeps the debug box behind you
                 if (++stillTicks >= STILL_TICKS_TO_RELEASE) {
+                    if (config.debugLogging) {
+                        logger.info("csmc-blink stopped -> flush {} packets, drift={}",
+                                packets.size(), round(getServerDistance()));
+                    }
                     release(true, true);
                 }
             } else {
