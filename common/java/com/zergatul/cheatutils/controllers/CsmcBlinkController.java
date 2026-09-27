@@ -20,6 +20,7 @@ import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
 import net.minecraft.world.InteractionHand;
+import org.lwjgl.glfw.GLFW;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -300,6 +301,18 @@ public class CsmcBlinkController {
         log();
     }
 
+    /** What the shot flush is looking at, so a log line says which of its conditions is failing. */
+    private String firingState() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) {
+            return "noplayer";
+        }
+        long handle = mc.getWindow().getWindow();
+        return "attack=" + (mc.options.keyAttack.isDown() || GLFW.glfwGetMouseButton(handle, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS)
+                + " use=" + (mc.options.keyUse.isDown() || GLFW.glfwGetMouseButton(handle, GLFW.GLFW_MOUSE_BUTTON_RIGHT) == GLFW.GLFW_PRESS)
+                + " weapon=" + CsmcBallistics.isWeapon(mc.player.getItemInHand(InteractionHand.MAIN_HAND));
+    }
+
     private void countRelease(String reason) {
         releaseReasons.merge(reason, 1, Integer::sum);
         releases++;
@@ -312,9 +325,10 @@ public class CsmcBlinkController {
         }
 
         logTimer = 0;
-        logger.info("csmc-blink armed={} enabled={} buffer={} rewind={} held/s={} passed/s={} releases/s={} drift={} serverPos={}/{}/{} releases={} packets={} inbound={}",
+        logger.info("csmc-blink armed={} enabled={} buffer={} rewind={} held/s={} passed/s={} releases/s={} drift={} serverPos={}/{}/{} releases={} firing={} packets={} inbound={}",
                 armed, config.enabled, packets.size(), rewindPending, heldPackets, passedPackets, releases,
                 round(getServerDistance()), round(serverX), round(serverY), round(serverZ), releaseReasons,
+                firingState(),
                 packetTypes, inboundTypes);
         heldPackets = 0;
         passedPackets = 0;
@@ -479,10 +493,25 @@ public class CsmcBlinkController {
         if (player == null) {
             return false;
         }
-        if (!mc.options.keyAttack.isDown() && !mc.options.keyUse.isDown()) {
+        if (!fireKeyHeld(mc)) {
             return false;
         }
         return CsmcBallistics.isWeapon(player.getItemInHand(InteractionHand.MAIN_HAND));
+    }
+
+    /**
+     * Vanilla's bound-key state is not enough on its own: while a gun is in hand CSMC consumes the
+     * mouse button itself, so the vanilla callback never runs, KeyMapping never sees the press and
+     * keyAttack.isDown() stays false the whole time you hold the trigger. The raw GLFW button state
+     * still tells the truth, so both are checked.
+     */
+    private static boolean fireKeyHeld(Minecraft mc) {
+        if (mc.options.keyAttack.isDown() || mc.options.keyUse.isDown()) {
+            return true;
+        }
+        long handle = mc.getWindow().getWindow();
+        return GLFW.glfwGetMouseButton(handle, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS
+                || GLFW.glfwGetMouseButton(handle, GLFW.GLFW_MOUSE_BUTTON_RIGHT) == GLFW.GLFW_PRESS;
     }
 
     /**

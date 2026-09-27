@@ -12,6 +12,7 @@ import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.component.CustomData;
 
 import java.io.IOException;
@@ -73,19 +74,20 @@ public final class CsmcBallistics {
     }
 
     /**
-     * True when the item carries the weapon prediction key, i.e. it is a CSMC gun. Deliberately only
-     * checks the key - not the blob layout - so a mod update that changes the descriptor degrades the
-     * drop compensation while still identifying the weapon.
+     * True when the item is a CSMC weapon. The registry namespace is the primary test: 6.0 no longer
+     * puts the prediction key on the item itself (the numbers moved to the on-disk cache), so a test
+     * built on that key stopped recognising guns and everything keyed on it silently went dead. The
+     * key is kept as a fallback for versions that still carry it.
      */
     public static boolean isWeapon(ItemStack stack) {
         if (stack == null || stack.isEmpty()) {
             return false;
         }
-        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
-        if (customData == null) {
-            return false;
+        if (BuiltInRegistries.ITEM.getKey(stack.getItem()).getNamespace().equals("csmcmod")) {
+            return true;
         }
-        return !customData.copyTag().getStringOr(PREDICTION_KEY, "").isBlank();
+        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
+        return customData != null && !customData.copyTag().getStringOr(PREDICTION_KEY, "").isBlank();
     }
 
     /**
