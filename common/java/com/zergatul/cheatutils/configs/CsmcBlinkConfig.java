@@ -14,7 +14,8 @@ public class CsmcBlinkConfig extends ModuleConfig implements ValidatableConfig {
     public Color debugBoxColor;
     public boolean debugLogging;
     public int maxPackets;
-    public int maxDistance;
+    /** blocks, as a double: 0 disables it, and sub-block values only survive as a non-int field */
+    public double maxDistance;
 
     public CsmcBlinkConfig() {
         enabled = false;
@@ -26,7 +27,7 @@ public class CsmcBlinkConfig extends ModuleConfig implements ValidatableConfig {
         debugBoxColor = new Color(0x00E5FF);
         debugLogging = false;
         maxPackets = 60;
-        maxDistance = 16;
+        maxDistance = 16.0;
     }
 
     @Override

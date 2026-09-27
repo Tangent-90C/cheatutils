@@ -59,7 +59,7 @@
             <span class="field-description">Limit, packets:</span>
             <input type="number" min="0" max="1000" class="w5" v-model="config.maxPackets" @change="update()">
             <span class="field-description">Limit, blocks:</span>
-            <input type="number" min="0" max="100" class="w5" v-model="config.maxDistance" @change="update()">
+            <input type="number" min="0" max="100" step="0.1" class="w5" v-model="config.maxDistance" @change="update()">
             <div class="section-description">
                 Caps how far the buffer may drift from the server position. When one is passed the buffer
                 is released and buffering continues from where the server now is, so the module keeps
