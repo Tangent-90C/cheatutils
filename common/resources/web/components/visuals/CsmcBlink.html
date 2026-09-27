@@ -19,20 +19,22 @@
         <div>
             <switch-checkbox v-model="config.flushOnShoot" @change="update()">Flush On Shot</switch-checkbox>
             <div class="description">
-                Release the buffer the moment an action packet is about to be sent, so the server resolves
-                that action against the position you are standing in. CSMC reports every shot with the
-                offhand-swap packet, so left click always counts; aiming down sights lets a use-item
-                packet through as well, which releases the buffer too. Buffering continues afterwards, so
-                every shot is preceded by its own release.
+                Release the buffer the moment a shot is being fired, so the server resolves it against
+                the position you are standing in. On weapons that stay on the vanilla attack path the
+                trigger is the action packet itself; on CSMC 6.0, which builds no packet for a shot, it
+                is the fire key being held. Both are watched, so every shot - including the first one of
+                a press - is preceded by its own release. Buffering continues afterwards, so the next
+                shot gets the same treatment.
             </div>
         </div>
         <div>
             <switch-checkbox v-model="config.sendCurrentPosition" @change="update()">Send Current Position</switch-checkbox>
             <div class="description">
-                Push the position and rotation held right now together with the buffer. The move packet
-                of the current tick is built after the action packet and travels behind it, so without
-                this the server resolves the action against the previous tick. Expect the first bullet of
-                a burst to come from the exact position you are standing in.
+                Report the position you are standing in when the module is switched off, so the server
+                ends up where you actually are instead of wherever the buffer stopped. Has no effect on
+                the releases that happen while running: every flush - the one at a shot, at a limit, and
+                after you stop - already reports the current position, because that is what the release
+                is for.
             </div>
         </div>
         <div>
