@@ -104,6 +104,7 @@
     "fabric.compatibility.sodium.MixinBlockModelApiMemoryVertexConsumer",
     "fabric.compatibility.sodium.MixinEntityEspVertexConsumerWrapper",
     "fabric.compatibility.csmc.MixinCsmcSpread",
-    "fabric.compatibility.csmc.MixinCsmcSpreadLegacy"
+    "fabric.compatibility.csmc.MixinCsmcSpreadLegacy",
+    "fabric.compatibility.csmc.MixinCsmcShot"
   ]
 }

@@ -12,22 +12,24 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 public class FabricMixinPlugin extends MixinPlugin {
 
     /**
-     * Shot-direction class of CSMCMod 6.0 and the helper that applies the recoil punch inside it. The class
-     * name alone is no proof: 6.0 reused {@code b$2j} for an unrelated resource loader, so a name check there
+     * Per CSMC version: the class a mixin needs and a string that only that class carries. The class name
+     * alone is no proof - 6.0 reused {@code b$2j} for an unrelated resource loader, so a name-only check
      * passes while every injection point is gone, which is a mixin apply failure instead of a skip.
      */
-    private static final String CSMC_DIRECTION_CLASS_6 = "me/fadeorite/csmcmod/b$5os.class";
-    private static final String CSMC_DIRECTION_MARKER_6 = "me/fadeorite/csmcmod/b$5pg";
-
-    /** Same pair for CSMCMod 5.14 and earlier, where the shot direction was {@code b$2j} calling {@code W}. */
-    private static final String CSMC_DIRECTION_CLASS_5 = "me/fadeorite/csmcmod/b$2j.class";
-    private static final String CSMC_DIRECTION_MARKER_5 = "me/fadeorite/csmcmod/W";
+    private static final Map<String, String[]> CSMC_CLASS_GATES = Map.of(
+            // 6.0: shot direction, which applies the recoil punch through b$5pg
+            "MixinCsmcSpread", new String[] {"me/fadeorite/csmcmod/b$5os.class", "me/fadeorite/csmcmod/b$5pg"},
+            // 5.14 and earlier: shot direction, whose spread magnitude comes from W
+            "MixinCsmcSpreadLegacy", new String[] {"me/fadeorite/csmcmod/b$2j.class", "me/fadeorite/csmcmod/W"},
+            // 6.0: the fire handler, which is the only caller of the trajectory computation b$5qz
+            "MixinCsmcShot", new String[] {"me/fadeorite/csmcmod/b$5qu.class", "me/fadeorite/csmcmod/b$5qz"});
 
     private final Logger logger = LogManager.getLogger(FabricMixinPlugin.class);
 
@@ -56,10 +58,8 @@ public class FabricMixinPlugin extends MixinPlugin {
         }
 
         if (mixinClassName.startsWith("com.zergatul.cheatutils.mixins.fabric.compatibility.csmc.")) {
-            boolean legacy = mixinClassName.endsWith("MixinCsmcSpreadLegacy");
-            String entry = legacy ? CSMC_DIRECTION_CLASS_5 : CSMC_DIRECTION_CLASS_6;
-            String marker = legacy ? CSMC_DIRECTION_MARKER_5 : CSMC_DIRECTION_MARKER_6;
-            if (hasCsmcShotDirection(entry, marker)) {
+            String[] gate = CSMC_CLASS_GATES.get(mixinClassName.substring(mixinClassName.lastIndexOf('.') + 1));
+            if (gate != null && hasCsmcClass(gate[0], gate[1])) {
                 logger.info("CSMCMod detected. Will apply {}.", mixinClassName);
                 return true;
             } else {
@@ -82,11 +82,12 @@ public class FabricMixinPlugin extends MixinPlugin {
      * Presence of the class is not enough by itself. 6.0 kept the name {@code b$2j} for an unrelated
      * resource loader, so a name-only check there passes while the shot-direction code lives under another
      * name, and the mixin then fails to apply to the wrong class. The class must therefore also reference the
-     * helper this version hooks - {@code b$5pg} in 6.0, {@code W} in 5.14 - a string only the real
-     * shot-direction class carries. If the mod is installed but neither version is found, say so once: a
-     * silent "false" here is indistinguishable from the hooks never having existed.
+     * helper that version hooks - {@code b$5pg} in 6.0's shot direction, {@code W} in 5.14's, {@code b$5qz}
+     * for the fire handler - a string only the real class carries. If the mod is installed but no known
+     * version is found, say so once per missing entry: a silent "false" here is indistinguishable from the
+     * hooks never having existed.
      */
-    private boolean hasCsmcShotDirection(String entry, String marker) {
+    private boolean hasCsmcClass(String entry, String marker) {
         boolean csmcInstalled = false;
         for (ModContainerImpl mod : FabricLoaderImpl.INSTANCE.getModsInternal()) {
             if (!mod.getMetadata().getId().equals("csmcmod")) {
@@ -119,7 +120,7 @@ public class FabricMixinPlugin extends MixinPlugin {
             }
         }
         if (csmcInstalled) {
-            logger.warn("CSMCMod is installed but {} was not found in it. CSMC spread/recoil options stay disabled.",
+            logger.warn("CSMCMod is installed but {} was not found in it. The matching CSMC options stay disabled.",
                     entry);
         }
         return false;
