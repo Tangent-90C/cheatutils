@@ -86,10 +86,10 @@
     "common.MixinSoundBufferLibrary",
     "common.MixinSlimeBlock",
     "common.MixinSoundEngine",
-    "common.MixinSoundInstance",
     "common.MixinSoundManager",
     "common.MixinUser",
     "common.MixinWeatherEffectRenderer",
+    "common.MixinWindow",
 
     "fnf.MixinGuiGraphics",
 

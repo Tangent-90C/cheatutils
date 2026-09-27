@@ -19,6 +19,7 @@
     "common.accessors.CompositeRenderTypeAccessor",
     "common.accessors.CompositeStateAccessor",
     "common.accessors.CrossbowItemAccessor",
+    "common.accessors.EntityBoundSoundInstanceAccessor",
     "common.accessors.EntityTypeAccessor",
     "common.accessors.FogRendererAccessor",
     "common.accessors.GuiAccessor",
@@ -85,9 +86,11 @@
     "common.MixinServerboundMovePlayerPacket",
     "common.MixinSoundBufferLibrary",
     "common.MixinSlimeBlock",
+    "common.MixinSoundEngine",
     "common.MixinSoundManager",
     "common.MixinUser",
     "common.MixinWeatherEffectRenderer",
+    "common.MixinWindow",
 
     "fnf.MixinGuiGraphics",
 

@@ -47,9 +47,9 @@ import java.util.Map;
  * <li>6.0 builds no packet at all anywhere in the jar (no action, interact, use or swing packet, not
  * even a custom payload) and swallows the vanilla mouse button while a gun is held, so there is no
  * outgoing packet to watch. What is left is the moment the shot is decided, which is the fire key
- * being held. The buffer is released at the head of the frame, before the frame's queued tasks are
- * dispatched, because that is the moment the shot leaves - see
- * {@link #onBeforeProcessGameTasks()}.</li>
+ * being held. The buffer is released at the head of {@code Window.updateDisplay} - the last point
+ * before the window's mouse events are dispatched - because that dispatch is where the shot is
+ * decided. See {@link #onBeforeUpdateDisplay()}.</li>
  * </ul>
  * Both are watched, together with the rest of the action family, since weapons that stay on the
  * vanilla path still send an interact or a use-item packet.
@@ -134,7 +134,7 @@ public class CsmcBlinkController {
     private CsmcBlinkController() {
         NetworkPacketsController.instance.addClientPacketHandler(this::onClientPacket);
         NetworkPacketsController.instance.addServerPacketHandler(this::onServerPacket);
-        Events.BeforeProcessGameTasks.add(this::onBeforeProcessGameTasks);
+        Events.BeforeUpdateDisplay.add(this::onBeforeUpdateDisplay);
         Events.ClientTickEnd.add(this::onClientTickEnd);
         Events.ClientPlayerLoggingOut.add(this::onAbort);
         Events.DimensionChange.add(this::onAbort);
@@ -291,19 +291,26 @@ public class CsmcBlinkController {
     }
 
     /**
-     * The frame head, before the queued game tasks are dispatched. CSMC 6.0 leaves the shot in no
-     * packet at all, so the release is driven from here.
+     * The head of {@code Window.updateDisplay}: the last point in the frame before the window's mouse
+     * events are dispatched. CSMC 6.0 leaves the shot in no packet at all, so the release is driven
+     * from here.
      * <p>
-     * This moment is the whole point: the client turns a mouse press into a queued task and runs the
-     * task list at the top of {@code Minecraft.runTick()}, <em>before</em> {@code tick()} - and CSMC
-     * decides the shot inside that task. Releasing anywhere in the tick is therefore always one shot
-     * late: the first bullet of a press is dispatched before the tick it is often assumed to belong
-     * to, so the server resolves it against whatever the buffer was still holding, and the shots
-     * after it in the same burst already had the release, which is exactly why only the first one
-     * looked wrong. Releasing here puts the held history and the position claimed right now in front
-     * of the shot, in the same frame, in the order the server needs.
+     * This exact position is the whole fix, and it was established from the jars rather than assumed:
+     * the mouse button callback is not queued but run inline - {@code Mouse} submits it through
+     * {@code Minecraft.execute}, which on the render thread runs the task immediately
+     * ({@code ThreadedExecutor.execute} runs the runnable directly unless {@code executeBlocking} is
+     * draining, and it is not), and the callback is invoked from {@code RenderSystem.pollEvents} -
+     * which is {@code GLFW.glfwPollEvents} - called from {@code Window.updateDisplay} at the very end
+     * of {@code Minecraft.runTick}. So CSMC decides the shot at the end of the frame, before the tick
+     * that follows it. Releasing at the head of the tick is therefore never early enough: the buffer
+     * is still holding everything, the server resolves the first bullet where it last left you, and
+     * the shots after it have had a release in between - which is exactly the "first shot only" shape
+     * of the bug.
+     * <p>
+     * Releasing here puts the held history and the position claimed right now in front of that
+     * dispatch, in the same frame, microseconds earlier, which is as early as it can get.
      */
-    private void onBeforeProcessGameTasks() {
+    private void onBeforeUpdateDisplay() {
         CsmcBlinkConfig config = ConfigStore.instance.getConfig().csmcBlinkConfig;
         if (mc.player == null || mc.player != trackedPlayer || rewindPending) {
             return;
@@ -475,7 +482,7 @@ public class CsmcBlinkController {
      * told about. Up to CSMC 5.14 the shot itself was the offhand swap CSMC fired for every weapon;
      * the interact and swing packets cover weapons that still run on the vanilla attack path - vanilla
      * sends one of each per click. CSMC 6.0 sends none of these for a shot, so the release is driven
-     * from the frame head instead - see {@link #onBeforeProcessGameTasks()}.
+     * from the head of {@code Window.updateDisplay} instead - see {@link #onBeforeUpdateDisplay()}.
      * <p>
      * The use-item family is deliberately absent. {@code ServerboundUseItemPacket} and
      * {@code ServerboundUseItemOnPacket} are not discrete actions: vanilla sends them every tick for as

@@ -19,11 +19,11 @@ public class Events {
 
     public static final SimpleEventHandler ClientTickStart = new SimpleEventHandler();
 
-    // HEAD of Minecraft.runTick, before the queued game tasks run. This is the only point in a frame
-    // that is both after the mouse callback of the frame has been queued and before it is dispatched:
-    // Minecraft queues the mouse button press onto the main-thread task list and runs the list at the
-    // top of runTick, which is what makes the shot leave before the tick that follows it
-    public static final SimpleEventHandler BeforeProcessGameTasks = new SimpleEventHandler();
+    // HEAD of Window.updateDisplay, which is the last point in a frame before the window's mouse
+    // events are dispatched: updateDisplay calls RenderSystem.pollEvents -> GLFW.glfwPollEvents, and
+    // every mouse callback runs from inside that call. Anything that must happen before the client
+    // acts on the frame's input has to run here
+    public static final SimpleEventHandler BeforeUpdateDisplay = new SimpleEventHandler();
 
     public static final SimpleEventHandler BeforeHandleKeyBindings = new SimpleEventHandler();
     public static final SimpleEventHandler AfterHandleKeyBindings = new SimpleEventHandler();
