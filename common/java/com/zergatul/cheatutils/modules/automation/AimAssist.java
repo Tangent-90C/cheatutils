@@ -74,6 +74,9 @@ public class AimAssist implements Module {
     private double yawCorrection;
     private double pitchCorrection;
     private long debugClicks;
+    private String lastDropReason = "";
+    private int debugDropLogged;
+    private int debugDropSeen;
 
     private AimAssist() {
         Events.ClientTickEnd.add(this::onTickEnd);
@@ -348,13 +351,19 @@ public class AimAssist implements Module {
      */
     private Rotation applyBulletDrop(Rotation target) {
         AimAssistConfig config = ConfigStore.instance.getConfig().aimAssist;
-        if (!config.bulletDropCompensation || aimPoint == null || mc.player == null) {
+        if (!config.bulletDropCompensation) {
+            debugDropReason("disabled");
+            return target;
+        }
+        if (aimPoint == null || mc.player == null) {
+            debugDropReason("no_aim_point");
             return target;
         }
 
         CsmcBallistics.Ballistics ballistics =
                 CsmcBallistics.fromItem(mc.player.getItemInHand(InteractionHand.MAIN_HAND));
         if (ballistics == null) {
+            debugDropReason("no_ballistic_data[" + CsmcBallistics.lastFailureReason() + "]");
             return target;
         }
         // CSMCMod's ballistic computer elevates every shot to whatever the crosshair points
@@ -362,21 +371,54 @@ public class AimAssist implements Module {
         // discarding that elevation by rebuilding the shot direction from the aim snapshot.
         if (ballistics.hasBallisticComputer()
                 && !CsmcNoRecoilController.instance.isDiscardingBallisticElevation()) {
+            debugDropReason("gun_has_ballistic_computer");
             return target;
         }
 
         Vec3 delta = aimPoint.subtract(mc.player.getEyePosition());
-        Double offset = CsmcBallistics.pitchOffsetRadians(
-                ballistics,
-                Math.sqrt(delta.x * delta.x + delta.z * delta.z),
-                delta.y);
+        double horizontal = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+        Double offset = CsmcBallistics.pitchOffsetRadians(ballistics, horizontal, delta.y);
         if (offset == null) {
+            debugDropReason("no_solution");
             return target;
         }
 
+        debugDrop("vel=" + Math.round(ballistics.muzzleVelocity())
+                + " grav=" + ballistics.gravity()
+                + " dist=" + Math.round(horizontal)
+                + " pitch=" + String.format("%.2f", Math.toDegrees(offset)));
         return new Rotation(
                 Mth.clamp((float) (target.xRot() + Math.toDegrees(offset)), -90.0F, 90.0F),
                 target.yRot());
+    }
+
+    /**
+     * Records why bullet drop compensation was last skipped, so the once-per-second
+     * diagnostics can name the branch instead of staying silent.
+     */
+    private void debugDropReason(String reason) {
+        boolean changed = !reason.equals(lastDropReason);
+        lastDropReason = reason;
+        debugDropSeen++;
+        if (changed) {
+            debugDropLogged = 0;
+        }
+    }
+
+    /**
+     * Same cadence as {@link #logDiagnostics}: logs the first event of a state and then
+     * once per second while that state continues.
+     */
+    private void debugDrop(String detail) {
+        boolean changed = !"compensating".equals(lastDropReason);
+        debugDropReason("compensating");
+        if (changed) {
+            debugDropLogged = 0;
+        }
+        if (debugDropLogged < 3 || System.currentTimeMillis() - lastDebugLogTime < DEBUG_INTERVAL_MS) {
+            debugDropLogged++;
+            LOGGER.info("[AimAssistDrop] {} {}", lastDropReason, detail);
+        }
     }
 
     private void updateCorrections() {
@@ -713,7 +755,7 @@ public class AimAssist implements Module {
             }
         }
 
-        LOGGER.info("[AimAssistDebug] range={} fov={} speed={} precision={} los={} teammates={} aim={} combat={} combatCtl={} combatOn={} fireMode={} cps={} firstDelay={} tolerance={} living={} valid={} target={} angle={} aligned={} clicks={} rejections={} corrections={}",
+        LOGGER.info("[AimAssistDebug] range={} fov={} speed={} precision={} los={} teammates={} aim={} combat={} combatCtl={} combatOn={} fireMode={} cps={} firstDelay={} tolerance={} living={} valid={} target={} angle={} aligned={} clicks={} rejections={} corrections={} drop={}",
                 config.range, config.fov, config.rotationSpeed, config.precision,
                 config.checkLineOfSight, config.filterTeammates, isAimCorrectionActive(),
                 config.combatMode, config.combatControlMode, isCombatModeActive(),
@@ -722,13 +764,15 @@ public class AimAssist implements Module {
                 aimTarget == null ? "none" : aimTarget.getName().getString(),
                 aimPoint == null ? "none" : String.format("%.2f", getAngleTo(aimPoint)),
                 combatAligned, debugClicks,
-                rejections, debugCorrections);
+                rejections, debugCorrections,
+                lastDropReason + (debugDropSeen == 0 ? "(never ran)" : "x" + debugDropSeen));
         resetDebugCounters();
     }
 
     private void resetDebugCounters() {
         debugCorrections = 0;
         debugClicks = 0;
+        debugDropSeen = 0;
     }
 
     private Entity findTarget(Rotation playerRot) {
