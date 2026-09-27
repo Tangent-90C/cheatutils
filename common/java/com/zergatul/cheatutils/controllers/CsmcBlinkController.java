@@ -97,6 +97,12 @@ public class CsmcBlinkController {
     private boolean rewindArmed;
     private boolean rewindPending;
 
+    // player position at the previous tick end, which is what "you stopped" is measured against
+    private double lastTickX;
+    private double lastTickY;
+    private double lastTickZ;
+    private boolean lastTickKnown;
+
     // diagnostics: which path emptied the buffer, sampled once a second. Every release path counts
     // itself here, so the summary line says where the buffer went instead of leaving it to inference
     private final Map<String, Integer> releaseReasons = new LinkedHashMap<>();
@@ -282,6 +288,13 @@ public class CsmcBlinkController {
         } else if (armed) {
             countRelease("disabled");
             release();
+        }
+
+        if (mc.player != null) {
+            lastTickX = mc.player.getX();
+            lastTickY = mc.player.getY();
+            lastTickZ = mc.player.getZ();
+            lastTickKnown = true;
         }
 
         log();
@@ -664,15 +677,22 @@ public class CsmcBlinkController {
      * The position the buffer ends with is the position you are standing in, so there is no movement
      * left to hold. Rotation-only changes still count: they carry no movement either.
      */
+    /**
+     * True while you stay where you already were, so nothing new keeps arriving into the buffer.
+     * <p>
+     * Compares the player against the position of the previous tick, not against the newest buffered
+     * packet: that packet was built from this tick's move packet, so it always holds your current
+     * position and the comparison is true the whole time - which is what used to release the buffer
+     * every five ticks no matter how fast you were running, capping the drift at about a block.
+     */
     private boolean stoppedMoving() {
-        if (packets.isEmpty() || mc.player == null) {
+        if (packets.isEmpty() || mc.player == null || !lastTickKnown) {
             return false;
         }
 
-        ServerboundMovePlayerPacket last = packets.get(packets.size() - 1);
-        return last.getX(0) == mc.player.getX() &&
-                last.getY(0) == mc.player.getY() &&
-                last.getZ(0) == mc.player.getZ();
+        return lastTickX == mc.player.getX() &&
+                lastTickY == mc.player.getY() &&
+                lastTickZ == mc.player.getZ();
     }
 
     private boolean sameAsLast(ServerboundMovePlayerPacket packet) {
