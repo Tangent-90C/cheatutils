@@ -47,15 +47,33 @@ public class CsmcNoRecoilController {
                 && mc.player != null;
     }
 
+    /**
+     * Whether the locked-precise override is replacing CSMC's shot direction with the clean
+     * aim snapshot. That override runs after CSMCMod's own ballistic computer, so the gun's
+     * bullet-drop elevation is discarded - AimAssist then has to compensate itself even for
+     * guns that have the ballistic computer.
+     */
+    public boolean isDiscardingBallisticElevation() {
+        CsmcNoRecoilConfig config = ConfigStore.instance.getConfig().csmcNoRecoilConfig;
+        return config.enabled && config.mode == 4 && snapshotValid;
+    }
+
         private void onTickStart() {
         CsmcNoRecoilConfig config = ConfigStore.instance.getConfig().csmcNoRecoilConfig;
         // every flag must die with the module: the hooks live inside CSMC's own code path, so without
         // this gate a "disabled" module would keep reshaping shot direction
         boolean active = config.enabled && mc.player != null;
+        // punch scale: dead aim zeroes it (stream sits low), every other mode keeps it. Locked precise
+        // goes further: the shot direction itself is rebuilt from the pre-punch aim snapshot, so the
+        // direction leaving the client is the crosshair automatically - no tuning.
+        float patternScale = config.mode == 1 ? 0.0f : 1.0f;
         pushSpreadOptions(
-                active && config.mode != 2,
                 active && config.mode == 1,
-                active);
+                active ? patternScale : 1.0f,
+                active,
+                active && config.mode == 4 && snapshotValid,
+                yRot,
+                xRot);
     }
 
     /**
@@ -67,16 +85,19 @@ public class CsmcNoRecoilController {
      * package with an IllegalClassLoadError, which is an Error. This runs every tick, so a surprise here must
      * degrade to doing nothing instead of taking the client down.
      */
-        private void pushSpreadOptions(boolean smoothRecoil, boolean patternPunch, boolean noSpread) {
+        private void pushSpreadOptions(boolean smoothRecoil, float patternScale, boolean noSpread,
+            boolean overrideReturn, float snapshotYaw, float snapshotPitch) {
         try {
             if (spreadOptionsSetter == null && !spreadOptionsSearched) {
                 spreadOptionsSetter = Class
                         .forName("com.zergatul.cheatutils.csmc.CsmcSpreadOptions")
-                        .getMethod("update", boolean.class, boolean.class, boolean.class);
+                        .getMethod("update", boolean.class, float.class, boolean.class,
+                                boolean.class, float.class, float.class);
                 spreadOptionsSearched = true;
             }
             if (spreadOptionsSetter != null) {
-                spreadOptionsSetter.invoke(null, smoothRecoil, patternPunch, noSpread);
+                spreadOptionsSetter.invoke(null, smoothRecoil, patternScale, noSpread,
+                        overrideReturn, snapshotYaw, snapshotPitch);
             }
         } catch (Throwable error) {
             // absent on loaders without the csmc source set, or the class was renamed - nothing to push

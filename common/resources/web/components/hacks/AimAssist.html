@@ -124,7 +124,7 @@
                         <input type="text" class="search" v-model="search">
                     </div>
                     <div class="target-class-list">
-                        <div v-for="entity in entityListFiltered" :key="entity.clazz" :title="classTooltip(entity.clazz)">
+                        <div v-for="entity in entityListFiltered()" :key="entity.clazz" :title="classTooltip(entity.clazz)">
                             <label class="switch-label">
                                 <input type="checkbox"
                                     :checked="(config.targetClasses || []).includes(entity.clazz)"
@@ -132,7 +132,7 @@
                                 <span>{{ classLabel(entity.clazz) }}</span>
                             </label>
                         </div>
-                        <div v-if="entityListFiltered.length == 0" class="section-description">
+                        <div v-if="entityListFiltered().length == 0" class="section-description">
                             No entities match the filter.
                         </div>
                     </div>
@@ -155,7 +155,8 @@
                     <input type="text" class="w3" v-model="config.rotationSpeed" @change="update()">
                 </div>
                 <div class="section-description">
-                    Degrees per second the crosshair is allowed to rotate. Default: 600
+                    Degrees per second the crosshair is allowed to rotate.
+                    Set to 0 to rotate straight to the target without any stepping. Default: 600
                 </div>
                 <div class="flex-row">
                     <span class="field-description">FOV:</span>
@@ -192,6 +193,20 @@
                         Servers usually make teammates glow, so two equally glowing players count as a team.
                     </div>
                 </div>
+                <div>
+                    <switch-checkbox v-model="config.bulletDropCompensation" @change="update()">
+                        CSMC Bullet Drop Compensation
+                    </switch-checkbox>
+                    <div class="section-description">
+                        For CSMC guns without their own ballistic computer, raises the aim point by the
+                        exact bullet drop of the weapon you are holding. The muzzle velocity and gravity
+                        come from the gun item itself, so compensation adapts per gun automatically -
+                        pistols drop the most, rifles and DMRs the least.<br>
+                        Guns whose built-in ballistic computer is enabled are skipped: that computer
+                        already elevates shots to whatever the crosshair points at, and stacking both
+                        would overshoot.
+                    </div>
+                </div>
             </div>
         </fieldset>
 
@@ -206,6 +221,42 @@
                 still triggers the attack key and can break blocks. Turn it off while mining.
             </div>
             <div class="group-setting" v-if="config.combatMode">
+                <fieldset>
+                    <legend>
+                        Control Mode
+                    </legend>
+                    <div>
+                        <radio name="combatControlMode" value="Config" v-model="config.combatControlMode" @change="update()">Config</radio>
+                        <radio name="combatControlMode" value="Key" v-model="config.combatControlMode" @change="update()">Key / Script</radio>
+                    </div>
+                    <div class="section-description">
+                        Which source decides whether the attack key is pressed, on top of the checkbox
+                        above which always has to be enabled.<br>
+                        <b>Config</b> - always attacks once aligned. Scripting calls are ignored.<br>
+                        <b>Key / Script</b> - attacks only while
+                        <b>aimAssist.enableCombatMode()</b> is the last call made. The example below
+                        holds it together with Aim Correction on the same mouse side button.
+                    </div>
+                    <div v-if="config.combatControlMode == 'Key'">
+                        <br>
+                        Example for <b>Event Scripting</b> that holds both Aim Correction and Combat
+                        Mode while a mouse side button is pressed:
+                        <CodeBlock :code='`
+                            events.onHandleKeys(() => {
+                                if (input.isMouseDown(4)) {
+                                    aimAssist.enableAimCorrection();
+                                    aimAssist.enableCombatMode();
+                                } else {
+                                    aimAssist.disableAimCorrection();
+                                    aimAssist.disableCombatMode();
+                                }
+                            });
+                        `' />
+                        As with the Aim Correction binding, neither call writes to the config, so the
+                        checkboxes stay untouched and the switch state is not saved between launches.
+                        Releasing the button also releases the attack key, so it cannot stay stuck down.
+                    </div>
+                </fieldset>
                 <div>
                     <radio name="fireMode" value="Click" v-model="config.combatFireMode" @change="update()">Click</radio>
                     <radio name="fireMode" value="Hold" v-model="config.combatFireMode" @change="update()">Hold</radio>
@@ -213,6 +264,9 @@
                 <div class="section-description">
                     <b>Click</b> - repeatedly clicks at "Clicks per second".<br>
                     <b>Hold</b> - holds the attack button for fully automatic weapons.
+                    Both drive the real attack button, the same way moving the mouse does, so mods
+                    that read the raw mouse button instead of the vanilla attack - shooter mods
+                    that fire a weapon with it - still see the input.
                 </div>
                 <div class="flex-row">
                     <span class="field-description">Clicks per second:</span>

@@ -34,7 +34,8 @@ export function getComponent(path) {
 export function withCss(url, args) {
     const linkId = url.match(/(\w+)\.js$/)[1] + '-CSS';
     if (document.getElementById(linkId) != null) {
-        return args;
+        // always a promise, so callers cannot treat the result as `args` right away
+        return Promise.resolve(args);
     } else {
         return new Promise((resolve, reject) => {
             const link = document.createElement('link');

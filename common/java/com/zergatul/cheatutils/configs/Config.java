@@ -72,6 +72,7 @@ public class Config {
     public StepUpConfig stepUp = new StepUpConfig();
     public AimAssistConfig aimAssist = new AimAssistConfig();
     public CsmcNoRecoilConfig csmcNoRecoilConfig = new CsmcNoRecoilConfig();
+    public CsmcBlinkConfig csmcBlinkConfig = new CsmcBlinkConfig();
 
     public Config() {
         esp = true;

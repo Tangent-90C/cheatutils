@@ -3,10 +3,13 @@ package com.zergatul.cheatutils.modules.automation;
 import com.zergatul.cheatutils.common.Events;
 import com.zergatul.cheatutils.common.events.PlayerReleaseUsingItemEvent;
 import com.zergatul.cheatutils.common.events.PlayerTurnByMouseEvent;
+import com.zergatul.cheatutils.compatibility.csmc.CsmcBallistics;
 import com.zergatul.cheatutils.configs.AimAssistConfig;
 import com.zergatul.cheatutils.configs.ConfigStore;
+import com.zergatul.cheatutils.controllers.CsmcNoRecoilController;
 import com.zergatul.cheatutils.controllers.NetworkPacketsController;
 import com.zergatul.cheatutils.mixins.common.accessors.KeyMappingAccessor;
+import com.zergatul.cheatutils.mixins.common.accessors.MouseHandlerAccessor;
 import com.zergatul.cheatutils.modules.Module;
 import com.zergatul.cheatutils.utils.MathUtils;
 import com.zergatul.cheatutils.utils.Rotation;
@@ -31,6 +34,7 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -46,6 +50,8 @@ public class AimAssist implements Module {
     private static final Logger LOGGER = LogManager.getLogger(AimAssist.class);
     private static final double TICKS_PER_SECOND = 20;
     private static final long DEBUG_INTERVAL_MS = 1000;
+    /** How long the attack key stays down during one Combat Mode click, about a tick - close to a human click. */
+    private static final long CLICK_HOLD_NANOS = 50_000_000L;
 
     private final Minecraft mc = Minecraft.getInstance();
 
@@ -56,6 +62,7 @@ public class AimAssist implements Module {
     private Entity aimTarget;
     private Vec3 aimPoint;
     private boolean aimCorrectionActive = true;
+    private boolean combatModeActive = true;
     private Rotation aimRotation;
     private long lastDebugLogTime;
     private long debugCorrections;
@@ -63,8 +70,10 @@ public class AimAssist implements Module {
     private boolean combatAligned;
     private boolean combatHolding;
     private long nextCombatClickNanos;
+    private long clickReleaseNanos;
     private double yawCorrection;
     private double pitchCorrection;
+    private long debugClicks;
 
     private AimAssist() {
         Events.ClientTickEnd.add(this::onTickEnd);
@@ -104,13 +113,37 @@ public class AimAssist implements Module {
     }
 
     /**
+     * Runtime switch for Combat Mode, consulted only while its control mode is Key. Disabling
+     * releases the attack key right away, so a held attack cannot stay stuck down after the
+     * script lets go of the button.
+     */
+    public void enableCombatMode() {
+        combatModeActive = true;
+    }
+
+    public void disableCombatMode() {
+        combatModeActive = false;
+        releaseCombatClick();
+    }
+
+    /**
+     * Whether Combat Mode is currently allowed to act. In Config mode this follows the
+     * checkbox and ignores the runtime switch, so a script never sees a state the module
+     * isn't actually using.
+     */
+    public boolean isCombatModeActive() {
+        AimAssistConfig config = ConfigStore.instance.getConfig().aimAssist;
+        return config.combatMode && (!config.isCombatKeyControlMode() || combatModeActive);
+    }
+
+    /**
      * Whether the module is currently allowed to act. In Config mode this follows
      * the checkbox and ignores the runtime switch, so a script never sees a state
      * the module isn't actually using.
      */
     public boolean isAimCorrectionActive() {
         AimAssistConfig config = ConfigStore.instance.getConfig().aimAssist;
-        return config.aimCorrection && (!config.isKeyControlMode() || aimCorrectionActive);
+        return config.aimCorrection && (!config.isAimKeyControlMode() || aimCorrectionActive);
     }
 
     private void onTickEnd() {
@@ -250,7 +283,7 @@ public class AimAssist implements Module {
             return false;
         }
         // Config mode ignores the scripting switch entirely
-        return !config.isKeyControlMode() || aimCorrectionActive;
+        return !config.isAimKeyControlMode() || aimCorrectionActive;
     }
 
     /**
@@ -272,9 +305,10 @@ public class AimAssist implements Module {
     }
 
     /**
-     * Steps the current rotation toward the aim point by at most
-     * rotationSpeed degrees per tick. The mouse handler then closes whatever
-     * gap is left, so the crosshair lands exactly on the aim point.
+     * Steps the current rotation toward the aim point by at most rotationSpeed degrees per
+     * second. The mouse handler then closes whatever gap is left, so the crosshair lands
+     * exactly on the aim point. A rotationSpeed of 0 skips the stepping entirely, so the aim
+     * point is handed over as is and the crosshair rotates straight to it.
      */
     private void computeAimRotation() {
         if (aimTarget == null || mc.player == null) {
@@ -284,7 +318,12 @@ public class AimAssist implements Module {
 
         AimAssistConfig config = ConfigStore.instance.getConfig().aimAssist;
         Rotation current = new Rotation(mc.player.getXRot(), mc.player.getYRot());
-        Rotation target = RotationUtils.getRotation(mc.player.getEyePosition(), aimPoint);
+        Rotation target = applyBulletDrop(RotationUtils.getRotation(mc.player.getEyePosition(), aimPoint));
+
+        if (config.rotationSpeed <= 0) {
+            aimRotation = target;
+            return;
+        }
 
         double deltaX = Mth.wrapDegrees(target.xRot() - current.xRot());
         double deltaY = Mth.wrapDegrees(target.yRot() - current.yRot());
@@ -299,6 +338,45 @@ public class AimAssist implements Module {
         aimRotation = new Rotation(
                 (float) (current.xRot() + deltaX * factor),
                 (float) (current.yRot() + deltaY * factor));
+    }
+
+    /**
+     * Raises the aim rotation by the bullet drop of the held CSMC gun, so shots
+     * land on the target instead of under it. Guns that run CSMCMod's own
+     * ballistic computer are skipped: that computer already elevates every shot
+     * to whatever the crosshair points at, and stacking both would overshoot.
+     */
+    private Rotation applyBulletDrop(Rotation target) {
+        AimAssistConfig config = ConfigStore.instance.getConfig().aimAssist;
+        if (!config.bulletDropCompensation || aimPoint == null || mc.player == null) {
+            return target;
+        }
+
+        CsmcBallistics.Ballistics ballistics =
+                CsmcBallistics.fromItem(mc.player.getItemInHand(InteractionHand.MAIN_HAND));
+        if (ballistics == null) {
+            return target;
+        }
+        // CSMCMod's ballistic computer elevates every shot to whatever the crosshair points
+        // at, so compensating here would overshoot - unless the locked-precise override is
+        // discarding that elevation by rebuilding the shot direction from the aim snapshot.
+        if (ballistics.hasBallisticComputer()
+                && !CsmcNoRecoilController.instance.isDiscardingBallisticElevation()) {
+            return target;
+        }
+
+        Vec3 delta = aimPoint.subtract(mc.player.getEyePosition());
+        Double offset = CsmcBallistics.pitchOffsetRadians(
+                ballistics,
+                Math.sqrt(delta.x * delta.x + delta.z * delta.z),
+                delta.y);
+        if (offset == null) {
+            return target;
+        }
+
+        return new Rotation(
+                Mth.clamp((float) (target.xRot() + Math.toDegrees(offset)), -90.0F, 90.0F),
+                target.yRot());
     }
 
     private void updateCorrections() {
@@ -326,28 +404,30 @@ public class AimAssist implements Module {
         AimAssistConfig config = ConfigStore.instance.getConfig().aimAssist;
         long now = System.nanoTime();
 
-        boolean aligned = config.combatMode
+        boolean aligned = isCombatModeActive()
                 && aimTarget != null
                 && aimPoint != null
                 && mc.player != null
                 && mc.level != null
                 && mc.screen == null
                 && mc.isWindowActive()
-                && getAngleTo(aimPoint) <= config.attackTolerance;
+                && getAngleTo(aimRotation) <= config.attackTolerance;
+        boolean wasAligned = combatAligned;
+        combatAligned = aligned;
         if (!aligned) {
             releaseCombatClick();
             combatTarget = null;
-            combatAligned = false;
             return;
         }
 
-        boolean firstShot = aimTarget != combatTarget || !combatAligned;
+        // re-acquiring after the crosshair drifted out counts as a first shot, so the
+        // first attack delay applies again
+        boolean firstShot = aimTarget != combatTarget || !wasAligned;
         if (firstShot) {
             releaseCombatClick();
             nextCombatClickNanos = now + config.firstAttackDelay * 1_000_000L;
         }
         combatTarget = aimTarget;
-        combatAligned = true;
 
         if (config.isHoldMode()) {
             if (now < nextCombatClickNanos) {
@@ -355,24 +435,57 @@ public class AimAssist implements Module {
                 return;
             }
             if (!combatHolding) {
-                KeyMapping.set(getAttackKey(), true);
+                pressAttackKey();
                 combatHolding = true;
             }
             return;
         }
 
+        // Click mode: a click is a real press followed by a release, so a click in
+        // flight is finished before the next one is scheduled
         if (combatHolding) {
-            KeyMapping.set(getAttackKey(), false);
+            if (now < clickReleaseNanos) {
+                return;
+            }
+            releaseAttackKey();
             combatHolding = false;
-            return;
         }
         if (now < nextCombatClickNanos) {
             return;
         }
 
-        KeyMapping.click(getAttackKey());
+        pressAttackKey();
+        combatHolding = true;
+        clickReleaseNanos = now + CLICK_HOLD_NANOS;
         nextCombatClickNanos =
-                now + (long) (1_000_000_000D / config.clicksPerSecond);
+                Math.max(now + (long) (1_000_000_000D / config.clicksPerSecond), clickReleaseNanos);
+    }
+
+    /**
+     * Presses the attack key the way a real click does, by driving the mouse button callback
+     * instead of only bumping {@code KeyMapping.clickCount}. Gun mods - CSMC among them - read
+     * the raw button callback and cancel the vanilla attack while a weapon is held, so a
+     * synthetic KeyMapping click never reaches them. A keyboard-bound attack key has no
+     * callback to drive, so it falls back to the KeyMapping pair.
+     */
+    private void pressAttackKey() {
+        InputConstants.Key key = getAttackKey();
+        if (key.getType() == InputConstants.Type.MOUSE && mc.mouseHandler instanceof MouseHandlerAccessor accessor) {
+            accessor.onPress_CU(mc.getWindow().getWindow(), key.getValue(), GLFW.GLFW_PRESS, 0);
+        } else {
+            KeyMapping.set(key, true);
+            KeyMapping.click(key);
+        }
+        debugClicks++;
+    }
+
+    private void releaseAttackKey() {
+        InputConstants.Key key = getAttackKey();
+        if (key.getType() == InputConstants.Type.MOUSE && mc.mouseHandler instanceof MouseHandlerAccessor accessor) {
+            accessor.onPress_CU(mc.getWindow().getWindow(), key.getValue(), GLFW.GLFW_RELEASE, 0);
+        } else {
+            KeyMapping.set(key, false);
+        }
     }
 
     private void releaseCombatClick() {
@@ -380,7 +493,7 @@ public class AimAssist implements Module {
             return;
         }
 
-        KeyMapping.set(getAttackKey(), false);
+        releaseAttackKey();
         combatHolding = false;
     }
 
@@ -547,6 +660,21 @@ public class AimAssist implements Module {
                 RotationUtils.getRotation(mc.player.getEyePosition(), point)));
     }
 
+    /**
+     * Alignment is measured against the aim rotation, not the raw aim point,
+     * so bullet drop compensation does not make Combat Mode refuse to attack:
+     * the compensated rotation is where the crosshair - and the shot - actually
+     * goes.
+     */
+    private double getAngleTo(Rotation rotation) {
+        if (rotation == null || mc.player == null) {
+            return Double.MAX_VALUE;
+        }
+
+        Rotation current = new Rotation(mc.player.getXRot(), mc.player.getYRot());
+        return Math.sqrt(current.distanceSqrTo(rotation));
+    }
+
     private boolean hasLineOfSight(Vec3 point) {
         ClipContext context = new ClipContext(mc.player.getEyePosition(), point,
                 ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, mc.player);
@@ -585,18 +713,22 @@ public class AimAssist implements Module {
             }
         }
 
-        LOGGER.info("[AimAssistDebug] range={} fov={} speed={} precision={} los={} teammates={} combat={} fireMode={} cps={} firstDelay={} tolerance={} living={} valid={} target={} rejections={} corrections={}",
+        LOGGER.info("[AimAssistDebug] range={} fov={} speed={} precision={} los={} teammates={} aim={} combat={} combatCtl={} combatOn={} fireMode={} cps={} firstDelay={} tolerance={} living={} valid={} target={} angle={} aligned={} clicks={} rejections={} corrections={}",
                 config.range, config.fov, config.rotationSpeed, config.precision,
-                config.checkLineOfSight, config.filterTeammates, config.combatMode,
+                config.checkLineOfSight, config.filterTeammates, isAimCorrectionActive(),
+                config.combatMode, config.combatControlMode, isCombatModeActive(),
                 config.combatFireMode, config.clicksPerSecond, config.firstAttackDelay,
                 config.attackTolerance, living, valid,
                 aimTarget == null ? "none" : aimTarget.getName().getString(),
+                aimPoint == null ? "none" : String.format("%.2f", getAngleTo(aimPoint)),
+                combatAligned, debugClicks,
                 rejections, debugCorrections);
         resetDebugCounters();
     }
 
     private void resetDebugCounters() {
         debugCorrections = 0;
+        debugClicks = 0;
     }
 
     private Entity findTarget(Rotation playerRot) {

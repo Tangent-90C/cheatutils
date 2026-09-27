@@ -1,3 +1,4 @@
+import { withCss } from '/components/Loader.js'
 import { createSimpleComponent } from '/components/SimpleModule.js'
 import * as http from '/http.js'
 
@@ -9,8 +10,7 @@ const entityInfoPromise = http.get('/api/entity-info').then(entitiesList => {
 
 export function createComponent(template) {
     const args = createSimpleComponent('/api/aim-assist', template, {
-        components: ['CodeBlock', 'Radio'],
-        css: import.meta.url
+        components: ['CodeBlock', 'Radio']
     });
 
     const created = args.created;
@@ -61,5 +61,5 @@ export function createComponent(template) {
         return info && info.baseClasses ? info.baseClasses.map(c => c.split('.').pop()).join(' > ') : '';
     };
 
-    return args;
+    return withCss(import.meta.url, args);
 }

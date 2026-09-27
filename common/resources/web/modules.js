@@ -442,6 +442,13 @@ module({
 });
 module({
     group: 'visuals',
+    name: 'CSMC Blink',
+    component: 'CsmcBlink',
+    path: 'csmc-blink',
+    tags: ['blink', 'csmc']
+});
+module({
+    group: 'visuals',
     name: 'No Weather',
     component: 'NoWeather',
     path: 'no-weather',

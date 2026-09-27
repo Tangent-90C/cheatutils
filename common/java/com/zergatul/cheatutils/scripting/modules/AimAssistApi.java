@@ -69,6 +69,35 @@ public class AimAssistApi {
         return AimAssist.instance.isAimCorrectionActive();
     }
 
+    public boolean isCombatModeEnabled() {
+        return getConfig().combatMode;
+    }
+
+    public void toggleCombatMode() {
+        AimAssistConfig config = getConfig();
+        config.combatMode = !config.combatMode;
+        ConfigStore.instance.requestWrite();
+    }
+
+    /**
+     * Holds Combat Mode on for as long as a key is down, without touching the saved config.
+     * Only consulted while the Combat Mode control mode is Key. Pair with
+     * {@code events.onHandleKeys} to bind a key.
+     */
+    @ApiVisibility(ApiType.ACTION)
+    public void enableCombatMode() {
+        AimAssist.instance.enableCombatMode();
+    }
+
+    @ApiVisibility(ApiType.ACTION)
+    public void disableCombatMode() {
+        AimAssist.instance.disableCombatMode();
+    }
+
+    public boolean isCombatModeActive() {
+        return AimAssist.instance.isCombatModeActive();
+    }
+
     public boolean hasAimTarget() {
         return AimAssist.instance.getAimTarget() != null;
     }

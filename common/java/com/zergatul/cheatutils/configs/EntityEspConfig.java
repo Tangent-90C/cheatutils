@@ -1,6 +1,7 @@
 package com.zergatul.cheatutils.configs;
 
 import com.zergatul.cheatutils.configs.adapters.GsonSkip;
+import com.zergatul.cheatutils.controllers.CoverDetector;
 import com.zergatul.cheatutils.scripting.EntityEspConsumer;
 import com.zergatul.cheatutils.utils.TeamUtils;
 import net.minecraft.client.Minecraft;
@@ -30,6 +31,8 @@ public class EntityEspConfig extends EspConfigBase {
     public boolean scriptEnabled;
     public String code;
     public boolean ignoreTeammates;
+    public boolean useCoverColor;
+    public Color coverColor;
 
     @GsonSkip
     public EntityEspConsumer script;
@@ -40,6 +43,14 @@ public class EntityEspConfig extends EspConfigBase {
         }
         return !ignoreTeammates
                 || !TeamUtils.isTeammate(Minecraft.getInstance().player, entity);
+    }
+
+    /**
+     * Color to draw this entity with. Falls back to the configured color when the entity is not
+     * behind cover, or when the feature is off.
+     */
+    public Color getColor(Entity entity, Color color) {
+        return useCoverColor && CoverDetector.instance.isCovered(entity) ? coverColor : color;
     }
 
     public double getGlowMaxDistanceSqr() {
@@ -68,6 +79,8 @@ public class EntityEspConfig extends EspConfigBase {
 
         scriptEnabled = jsonConfig.scriptEnabled;
         ignoreTeammates = jsonConfig.ignoreTeammates;
+        useCoverColor = jsonConfig.useCoverColor;
+        coverColor = jsonConfig.coverColor;
     }
 
     public boolean useMinecraftOutline() {
@@ -95,6 +108,8 @@ public class EntityEspConfig extends EspConfigBase {
         config.glowColor = Color.WHITE;
         config.drawOverlay = false;
         config.overlayColor = new Color(0x80FFFFFF, true);
+        config.useCoverColor = false;
+        config.coverColor = new Color(0xFF6A00);
         config.ignoreTeammates = Player.class.isAssignableFrom(clazz);
         return config;
     }

@@ -23,6 +23,7 @@ public class AimAssistConfig implements ModuleStateProvider, ValidatableConfig {
     public boolean bowAssist;
 
     public boolean aimCorrection;
+    public boolean bulletDropCompensation;
     public String aimControlMode;
     public ImmutableList<Class<?>> targetClasses;
     public String aimAt;
@@ -35,6 +36,7 @@ public class AimAssistConfig implements ModuleStateProvider, ValidatableConfig {
     public boolean filterTeammates;
 
     public boolean combatMode;
+    public String combatControlMode;
     public String combatFireMode;
     public double clicksPerSecond;
     public int firstAttackDelay;
@@ -44,6 +46,7 @@ public class AimAssistConfig implements ModuleStateProvider, ValidatableConfig {
 
     public AimAssistConfig() {
         aimControlMode = ControlModeConfig;
+        combatControlMode = ControlModeConfig;
         // players only, so passive mobs like chickens are never picked up
         targetClasses = ImmutableList.from(Player.class);
         aimAt = AimAtAuto;
@@ -54,6 +57,8 @@ public class AimAssistConfig implements ModuleStateProvider, ValidatableConfig {
         checkLineOfSight = true;
         aimWhileBlocking = false;
         filterTeammates = true;
+        // only ever acts on CSMC guns without their own ballistic computer
+        bulletDropCompensation = true;
         combatFireMode = ClickMode;
         clicksPerSecond = 10;
         firstAttackDelay = 0;
@@ -70,12 +75,19 @@ public class AimAssistConfig implements ModuleStateProvider, ValidatableConfig {
     }
 
     /**
-     * In Config mode the checkbox above is the only authority and the scripting
-     * switch is ignored. In Key mode the switch decides while the checkbox acts
-     * as a master enable.
+     * In Config mode the checkbox is the only authority for Aim Correction and the scripting
+     * switch is ignored. In Key mode the switch decides while the checkbox acts as a master
+     * enable.
      */
-    public boolean isKeyControlMode() {
+    public boolean isAimKeyControlMode() {
         return ControlModeKey.equals(aimControlMode);
+    }
+
+    /**
+     * Same as {@link #isAimKeyControlMode}, for Combat Mode and its own scripting switch.
+     */
+    public boolean isCombatKeyControlMode() {
+        return ControlModeKey.equals(combatControlMode);
     }
 
     /**
@@ -99,7 +111,8 @@ public class AimAssistConfig implements ModuleStateProvider, ValidatableConfig {
         // classes become null when a mod that provided them is removed
         targetClasses = targetClasses.removeIf(Objects::isNull);
         range = MathUtils.clamp(range, 1, 1024);
-        rotationSpeed = MathUtils.clamp(rotationSpeed, 10, 3600);
+        // 0 disables the stepping, the aim point is applied as is
+        rotationSpeed = MathUtils.clamp(rotationSpeed, 0, 3600);
         fov = MathUtils.clamp(fov, 1, 360);
         precision = MathUtils.clamp(precision, 0.01, 5);
         clicksPerSecond = MathUtils.clamp(clicksPerSecond, 1, 20);
@@ -117,6 +130,11 @@ public class AimAssistConfig implements ModuleStateProvider, ValidatableConfig {
                 || !aimControlMode.equals(ControlModeConfig)
                 && !aimControlMode.equals(ControlModeKey)) {
             aimControlMode = ControlModeConfig;
+        }
+        if (combatControlMode == null
+                || !combatControlMode.equals(ControlModeConfig)
+                && !combatControlMode.equals(ControlModeKey)) {
+            combatControlMode = ControlModeConfig;
         }
     }
 }

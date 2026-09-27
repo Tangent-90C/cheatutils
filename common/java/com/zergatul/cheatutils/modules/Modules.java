@@ -23,6 +23,7 @@ public class Modules {
         register(FakeRotation.instance);
         register(BlockEventsProcessor.instance);
         register(NetworkPacketsController.instance);
+        register(CsmcBlinkController.instance);
         register(SpeedCounterController.instance);
         register(BlockFinder.instance);
         register(PreRenderGuiExecutor.instance);

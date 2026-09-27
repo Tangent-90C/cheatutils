@@ -10,6 +10,7 @@ import com.zergatul.cheatutils.common.Events;
 import com.zergatul.cheatutils.compatibility.WrappedRenderType;
 import com.zergatul.cheatutils.configs.ConfigStore;
 import com.zergatul.cheatutils.configs.EntityEspConfig;
+import com.zergatul.cheatutils.controllers.CoverDetector;
 import com.zergatul.cheatutils.font.StylizedText;
 import com.zergatul.cheatutils.mixins.common.accessors.CompositeRenderTypeAccessor;
 import com.zergatul.cheatutils.mixins.common.accessors.CompositeStateAccessor;
@@ -30,7 +31,9 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
+import java.awt.Color;
 import java.util.*;
+import java.util.Map;
 import java.util.function.Predicate;
 
 public class EntityEsp implements Module {
@@ -38,8 +41,10 @@ public class EntityEsp implements Module {
     public static final EntityEsp instance = new EntityEsp();
 
     private final Minecraft mc = Minecraft.getInstance();
-    private final Map<EntityEspConfig, List<BufferedVerticesEntry>> overlayBufferedVertices = new HashMap<>();
-    private final Map<EntityEspConfig, List<BufferedVerticesEntry>> outlineBufferedVertices = new HashMap<>();
+    // overlay and outline tint a whole batch at once, so vertices are bucketed by the color they were
+    // drawn for: an entity behind cover then lands in the cover color bucket, not the config one
+    private final Map<Color, List<BufferedVerticesEntry>> overlayBufferedVertices = new HashMap<>();
+    private final Map<Color, List<BufferedVerticesEntry>> outlineBufferedVertices = new HashMap<>();
     private final Map<EntityScriptResultKey, EntityScriptResult> scriptResults = new HashMap<>();
 
     private EntityEsp() {
@@ -49,6 +54,7 @@ public class EntityEsp implements Module {
 
     private void onBeforeRender() {
         scriptResults.clear();
+        CoverDetector.instance.nextFrame();
     }
 
     public MultiBufferSource onRenderEntityModifyBufferSource(Entity entity, MultiBufferSource bufferSource) {
@@ -72,7 +78,7 @@ public class EntityEsp implements Module {
                         !isOutlineDisabledFromScript(config, entity);
                 if (drawOverlay || drawOutline) {
                     // TODO: cache wrappers? each entity = new wrapper!
-                    return new EntityEsp.MultiBufferSourceWrapper(config, bufferSource, drawOverlay, drawOutline);
+                    return new EntityEsp.MultiBufferSourceWrapper(config, entity, bufferSource, drawOverlay, drawOutline);
                 }
             }
         }
@@ -101,7 +107,7 @@ public class EntityEsp implements Module {
         }
         for (EntityEspConfig config : ConfigStore.instance.getConfig().entities.configs) {
             if (config.useMinecraftOutline() && config.isValidEntity(entity)) {
-                return config.glowColor.getRGB();
+                return config.getColor(entity, config.glowColor).getRGB();
             }
         }
         return null;
@@ -170,10 +176,11 @@ public class EntityEsp implements Module {
                 Vec3 pos = entity.getPosition(partialTicks);
                 AABB box = entity.getDimensions(entity.getPose()).makeBoundingBox(pos);
 
-                float r = config.outlineColor.getRed() / 255f;
-                float g = config.outlineColor.getGreen() / 255f;
-                float b = config.outlineColor.getBlue() / 255f;
-                float a = config.outlineColor.getAlpha() / 255f;
+                Color outlineColor = config.getColor(entity, config.outlineColor);
+                float r = outlineColor.getRed() / 255f;
+                float g = outlineColor.getGreen() / 255f;
+                float b = outlineColor.getBlue() / 255f;
+                float a = outlineColor.getAlpha() / 255f;
 
                 final int lineWidth = config.outlineWidth;
                 if (lineWidth == 1) {
@@ -197,10 +204,11 @@ public class EntityEsp implements Module {
                             distanceSqr < c.getTracerMaxDistanceSqr()).findFirst().orElse(null);
 
             if (config != null && !isTracerDisabledFromScript(config, entity)) {
-                float r = config.tracerColor.getRed() / 255f;
-                float g = config.tracerColor.getGreen() / 255f;
-                float b = config.tracerColor.getBlue() / 255f;
-                float a = config.tracerColor.getAlpha() / 255f;
+                Color tracerColor = config.getColor(entity, config.tracerColor);
+                float r = tracerColor.getRed() / 255f;
+                float g = tracerColor.getGreen() / 255f;
+                float b = tracerColor.getBlue() / 255f;
+                float a = tracerColor.getAlpha() / 255f;
 
                 Vec3 pos = entity.getPosition(event.getTickDelta());
                 final int lineWidth = config.tracerWidth;
@@ -224,10 +232,11 @@ public class EntityEsp implements Module {
 
     private void drawOverlays(RenderWorldLastEvent event) {
         EntityOverlayRenderer renderer = RenderUtilities.instance.getEntityOverlayRenderer();
-        for (EntityEspConfig config: overlayBufferedVertices.keySet()) {
+        for (Map.Entry<Color, List<BufferedVerticesEntry>> batch : overlayBufferedVertices.entrySet()) {
+            Color color = batch.getKey();
             renderer.begin();
 
-            List<BufferedVerticesEntry> entries = overlayBufferedVertices.get(config);
+            List<BufferedVerticesEntry> entries = batch.getValue();
             for (BufferedVerticesEntry entry: entries) {
                 FloatList list = entry.list;
                 if (list.size() == 0) {
@@ -273,10 +282,10 @@ public class EntityEsp implements Module {
             }
 
             renderer.end(
-                    config.overlayColor.getRed() / 255f,
-                    config.overlayColor.getGreen() / 255f,
-                    config.overlayColor.getBlue() / 255f,
-                    config.overlayColor.getAlpha() / 255f);
+                    color.getRed() / 255f,
+                    color.getGreen() / 255f,
+                    color.getBlue() / 255f,
+                    color.getAlpha() / 255f);
         }
 
         overlayBufferedVertices.clear();
@@ -284,10 +293,11 @@ public class EntityEsp implements Module {
 
     private void drawOutlines(RenderWorldLastEvent event) {
         EntityOutlineRenderer renderer = RenderUtilities.instance.getEntityOutlineRenderer();
-        for (EntityEspConfig config: outlineBufferedVertices.keySet()) {
+        for (Map.Entry<Color, List<BufferedVerticesEntry>> batch : outlineBufferedVertices.entrySet()) {
+            Color color = batch.getKey();
             renderer.begin();
 
-            for (BufferedVerticesEntry entry : outlineBufferedVertices.get(config)) {
+            for (BufferedVerticesEntry entry : batch.getValue()) {
                 FloatList list = entry.list;
                 if (list.size() == 0) {
                     continue;
@@ -328,10 +338,10 @@ public class EntityEsp implements Module {
             }
 
             renderer.end(
-                    config.glowColor.getRed() / 255f,
-                    config.glowColor.getGreen() / 255f,
-                    config.glowColor.getBlue() / 255f,
-                    config.glowColor.getAlpha() / 255f);
+                    color.getRed() / 255f,
+                    color.getGreen() / 255f,
+                    color.getBlue() / 255f,
+                    color.getAlpha() / 255f);
         }
 
         outlineBufferedVertices.clear();
@@ -377,13 +387,16 @@ public class EntityEsp implements Module {
 
     public static class MultiBufferSourceWrapper implements MultiBufferSource {
 
-        private final EntityEspConfig config;
+        private final Color overlayColor;
+        private final Color outlineColor;
         private final MultiBufferSource source;
         private final boolean overlay;
         private final boolean outline;
 
-        public MultiBufferSourceWrapper(EntityEspConfig config, MultiBufferSource source, boolean overlay, boolean outline) {
-            this.config = config;
+        public MultiBufferSourceWrapper(
+                EntityEspConfig config, Entity entity, MultiBufferSource source, boolean overlay, boolean outline) {
+            this.overlayColor = config.getColor(entity, config.overlayColor);
+            this.outlineColor = config.getColor(entity, config.glowColor);
             this.source = source;
             this.overlay = overlay;
             this.outline = outline;
@@ -406,7 +419,9 @@ public class EntityEsp implements Module {
                             if (inner instanceof VertexConsumerWrapper) {
                                 return inner;
                             } else {
-                                return new VertexConsumerWrapper(config, texture.get(), source.getBuffer(renderType), overlay, outline);
+                                return new VertexConsumerWrapper(
+                                        overlayColor, outlineColor, texture.get(),
+                                        source.getBuffer(renderType), overlay, outline);
                             }
                         }
                     }
@@ -440,7 +455,8 @@ public class EntityEsp implements Module {
         private FloatList outlineList;
 
         public VertexConsumerWrapper(
-                EntityEspConfig config,
+                Color overlayColor,
+                Color outlineColor,
                 ResourceLocation texture,
                 VertexConsumer consumer,
                 boolean overlay,
@@ -449,7 +465,7 @@ public class EntityEsp implements Module {
             this.consumer = consumer;
 
             if (overlay) {
-                List<BufferedVerticesEntry> entries = EntityEsp.instance.overlayBufferedVertices.computeIfAbsent(config, c -> new ArrayList<>());
+                List<BufferedVerticesEntry> entries = EntityEsp.instance.overlayBufferedVertices.computeIfAbsent(overlayColor, c -> new ArrayList<>());
                 for (BufferedVerticesEntry entry : entries) {
                     if (entry.texture.equals(texture)) {
                         overlayList = entry.list;
@@ -465,7 +481,7 @@ public class EntityEsp implements Module {
             }
 
             if (outline) {
-                List<BufferedVerticesEntry> entries = EntityEsp.instance.outlineBufferedVertices.computeIfAbsent(config, c -> new ArrayList<>());
+                List<BufferedVerticesEntry> entries = EntityEsp.instance.outlineBufferedVertices.computeIfAbsent(outlineColor, c -> new ArrayList<>());
                 for (BufferedVerticesEntry entry : entries) {
                     if (entry.texture.equals(texture)) {
                         outlineList = entry.list;

@@ -1,7 +1,9 @@
 package com.zergatul.cheatutils.mixins.fabric.compatibility.csmc;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.zergatul.cheatutils.csmc.CsmcSpreadOptions;
+import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
@@ -55,10 +57,7 @@ public abstract class MixinCsmcSpread {
                     target = "me.fadeorite.csmcmod.b$37.a(Lnet/minecraft/class_243;Lnet/minecraft/class_243;D)Lnet/minecraft/class_243;",
                     ordinal = 2))
     private static double onPunchVerticalTail1(double scale) {
-        if (CsmcSpreadOptions.patternPunch()) {
-            return 0.0;
-        }
-        return scale;
+        return scale * CsmcSpreadOptions.patternScale();
     }
 
     @ModifyArg(
@@ -68,10 +67,7 @@ public abstract class MixinCsmcSpread {
                     target = "me.fadeorite.csmcmod.b$37.a(Lnet/minecraft/class_243;Lnet/minecraft/class_243;D)Lnet/minecraft/class_243;",
                     ordinal = 3))
     private static double onPunchHorizontalTail1(double scale) {
-        if (CsmcSpreadOptions.patternPunch()) {
-            return 0.0;
-        }
-        return scale;
+        return scale * CsmcSpreadOptions.patternScale();
     }
 
     @ModifyArg(
@@ -81,10 +77,7 @@ public abstract class MixinCsmcSpread {
                     target = "me.fadeorite.csmcmod.b$37.a(Lnet/minecraft/class_243;Lnet/minecraft/class_243;D)Lnet/minecraft/class_243;",
                     ordinal = 4))
     private static double onPunchVerticalTail2(double scale) {
-        if (CsmcSpreadOptions.patternPunch()) {
-            return 0.0;
-        }
-        return scale;
+        return scale * CsmcSpreadOptions.patternScale();
     }
 
     @ModifyArg(
@@ -94,9 +87,16 @@ public abstract class MixinCsmcSpread {
                     target = "me.fadeorite.csmcmod.b$37.a(Lnet/minecraft/class_243;Lnet/minecraft/class_243;D)Lnet/minecraft/class_243;",
                     ordinal = 5))
     private static double onPunchHorizontalTail2(double scale) {
-        if (CsmcSpreadOptions.patternPunch()) {
-            return 0.0;
+        return scale * CsmcSpreadOptions.patternScale();
+    }
+
+    @ModifyReturnValue(
+            method = "a",
+            at = @At("RETURN"))
+    private static Vec3 onShotDirection(Vec3 original) {
+        if (CsmcSpreadOptions.overrideReturn()) {
+            return CsmcSpreadOptions.aimDirection();
         }
-        return scale;
+        return original;
     }
 }

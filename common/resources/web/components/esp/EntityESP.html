@@ -125,6 +125,21 @@
                         Servers usually make teammates glow, so two equally glowing players count as a team.
                     </div>
                 </div>
+                <div>
+                    <switch-checkbox v-model="selectedConfig.useCoverColor" @change="update(selectedConfig)">
+                        Different Color Behind Cover
+                    </switch-checkbox>
+                    <div class="section-description">
+                        Draws this entity in a separate color while it cannot be shot from where you stand,
+                        because blocks block the line to both sampled points of its hitbox - its eyes and its
+                        center. Applies to tracer, outline, glow and overlay. Targets that only peeked a part
+                        of their hitbox over cover still count as shootable and keep the regular color.
+                    </div>
+                    <color-picker
+                        v-model="selectedConfig.coverColor"
+                        v-show="selectedConfig.useCoverColor"
+                        @update:model-value="update(selectedConfig)" />
+                </div>
                 <div class="flex-row">
                     <span class="field-description">Max Distance:</span>
                     <input type="text" class="w5" v-model="selectedConfig.maxDistance" @change="update(selectedConfig)">

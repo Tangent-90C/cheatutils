@@ -24,6 +24,7 @@ public class Root {
     // hacks
     public static AutoCriticalsApi autoCriticals = new AutoCriticalsApi();
     public static BlinkApi blink = new BlinkApi();
+    public static CsmcBlinkApi csmcBlink = new CsmcBlinkApi();
     public static BoatHackApi boatHack = new BoatHackApi();
     public static FakeLagApi fakeLag = new FakeLagApi();
     public static FastBreakApi fastBreak = new FastBreakApi();

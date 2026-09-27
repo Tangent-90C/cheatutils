@@ -697,6 +697,18 @@ public class ApiHandler implements HttpHandler {
             }
         });
 
+        apis.add(new SimpleConfigApi<>("csmc-blink", CsmcBlinkConfig.class) {
+            @Override
+            protected CsmcBlinkConfig getConfig() {
+                return ConfigStore.instance.getConfig().csmcBlinkConfig;
+            }
+
+            @Override
+            protected void setConfig(CsmcBlinkConfig config) {
+                ConfigStore.instance.getConfig().csmcBlinkConfig = config;
+            }
+        });
+
         apis.add(new SimpleConfigApi<>("bob-hurt", BobHurtConfig.class) {
             @Override
             protected BobHurtConfig getConfig() {

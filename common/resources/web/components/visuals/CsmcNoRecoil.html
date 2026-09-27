@@ -13,14 +13,19 @@
             <label><input type="radio" value="1" v-model.number="config.mode" @change="update()"> Dead aim</label>
             <label><input type="radio" value="2" v-model.number="config.mode" @change="update()"> View kick</label>
             <label><input type="radio" value="3" v-model.number="config.mode" @change="update()"> Locked legacy</label>
+            <label><input type="radio" value="4" v-model.number="config.mode" @change="update()"> Locked precise</label>
             <div class="description">
-                Dead aim: crosshair locked, everything hits the crosshair - no recoil compensation at all.
+                Dead aim: crosshair locked, every recoil part dropped - the stream pins but sits slightly
+                low on full-auto (the server-side pattern showing through).
                 <br>
                 View kick: the crosshair climbs with recoil as usual, but impacts group on the original point.
                 <br>
                 Locked legacy: crosshair locked with the old behaviour - the stream pins but not all bullets
                 land on one point.
-            </div>
+                <br>
+                Locked precise: crosshair locked, and the shot direction leaving the client is rebuilt from
+                your true aim every frame - full automatic compensation, nothing to tune.
+                <br>
         </div>
         <div>
             <span class="field-description">View hold, %:</span>

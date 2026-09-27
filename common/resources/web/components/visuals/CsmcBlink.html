@@ -1,0 +1,102 @@
+<div class="module-main" v-if="config">
+    <div class="description">
+        Buffers outgoing movement while the server keeps you where you were, and pushes the buffer out
+        the moment an action packet leaves, so the server sees you where you stand before it resolves the
+        shot. Use <b>csmcBlink.enable()</b> / <b>csmcBlink.disable()</b> as keybinds, or toggle Enabled
+        here. While enabled you keep moving on the client only, so everything the server resolves comes
+        from the last released position. Standing still releases what is held a fifth of a second later:
+        the stutter comes from movement, not from standing in one place.
+    </div>
+
+    <div class="module-sections">
+        <div>
+            <switch-checkbox v-model="config.enabled" @change="update()">Enabled</switch-checkbox>
+            <div class="description">
+                Buffer movement now. Turning it off releases whatever is held, so the server catches up
+                with where you walked instead of leaving you behind.
+            </div>
+        </div>
+        <div>
+            <switch-checkbox v-model="config.flushOnShoot" @change="update()">Flush On Shot</switch-checkbox>
+            <div class="description">
+                Release the buffer the moment an action packet is about to be sent, so the server resolves
+                that action against the position you are standing in. CSMC reports every shot with the
+                offhand-swap packet, so left click always counts; aiming down sights lets a use-item
+                packet through as well, which releases the buffer too. Buffering continues afterwards, so
+                every shot is preceded by its own release.
+            </div>
+        </div>
+        <div>
+            <switch-checkbox v-model="config.sendCurrentPosition" @change="update()">Send Current Position</switch-checkbox>
+            <div class="description">
+                Push the position and rotation held right now together with the buffer. The move packet
+                of the current tick is built after the action packet and travels behind it, so without
+                this the server resolves the action against the previous tick. Expect the first bullet of
+                a burst to come from the exact position you are standing in.
+            </div>
+        </div>
+        <div>
+            <switch-checkbox v-model="config.respawnRewind" @change="update()">Rewind On Respawn</switch-checkbox>
+            <div class="description">
+                Drop the buffered movement when you respawn - recommended. When off, the buffer from
+                before your death is kept instead and the module stops buffering, so it can be replayed
+                later with <b>csmcBlink.recall()</b>. That reports the positions the buffer was recorded
+                at without reporting where you just respawned, which drags you back to where you died
+                instead of leaving you at the spawn point. Needs a server that accepts the old position
+                as authoritative.
+            </div>
+        </div>
+        <div>
+            <switch-checkbox v-model="config.releaseWhenStopped" @change="update()">Release When Stopped</switch-checkbox>
+            <div class="description">
+                Release the buffer shortly after you stop moving, so the box comes back onto you. This
+                does not touch the flush that fires on a shot - that one always runs, and with it the
+                server is told your position before the shot leaves whether you were moving or not.
+                Turn this off to keep the leftover offset while standing still.
+            </div>
+        </div>
+        <div>
+            <span class="field-description">Limit, packets:</span>
+            <input type="number" min="0" max="1000" class="w5" v-model="config.maxPackets" @change="update()">
+            <span class="field-description">Limit, blocks:</span>
+            <input type="number" min="0" max="100" class="w5" v-model="config.maxDistance" @change="update()">
+            <div class="section-description">
+                Caps how far the buffer may drift from the server position. When one is passed the buffer
+                is released and buffering continues from where the server now is, so the module keeps
+                running instead of ending the session. 0 disables the limit. A very long buffer has to be
+                replayed in a single tick by the server and looks like a teleport to everyone else, which
+                is what this protects against.
+            </div>
+        </div>
+        <fieldset>
+            <legend>
+                <switch-checkbox v-model="config.debugBox" @change="update()">
+                    Debug Box
+                </switch-checkbox>
+            </legend>
+            <color-picker
+                v-model="config.debugBoxColor"
+                @update:model-value="update()" />
+            <div class="section-description">
+                Draws a box at the position the server believes you are at, plus a line from it to where
+                you actually stand. Shown the whole time the module is enabled: while buffering the line
+                is the drift the server sees, and when it is not buffering the box sits exactly on top of
+                you - which is how you confirm the tracked position is still correct. Drawn through walls.
+            </div>
+        </fieldset>
+        <fieldset>
+            <legend>
+                <switch-checkbox v-model="config.debugLogging" @change="update()">
+                    Debug Logging
+                </switch-checkbox>
+            </legend>
+            <div class="section-description">
+                Writes one line per second to the game log: how many movement packets were held versus let
+                through, how many times the buffer was released, the current buffer size, the drift, and
+                a count of the packet types that went out. Use it when the debug box does not behave as
+                expected - held/s should climb while you move, and the packet list tells you which
+                outgoing packets are actually there, so a fire packet can be picked out from it.
+            </div>
+        </fieldset>
+    </div>
+</div>
