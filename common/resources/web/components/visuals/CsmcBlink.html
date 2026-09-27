@@ -34,7 +34,9 @@
                 ends up where you actually are instead of wherever the buffer stopped. Has no effect on
                 the releases that happen while running: every flush - the one at a shot, at a limit, and
                 after you stop - already reports the current position, because that is what the release
-                is for.
+                is for. A rewind held across a respawn is the exception: it is released without the
+                current position, because after a respawn that position is the respawn point the rewind
+                exists to undo.
             </div>
         </div>
         <div>
@@ -45,7 +47,8 @@
                 later with <b>csmcBlink.recall()</b>. That reports the positions the buffer was recorded
                 at without reporting where you just respawned, which drags you back to where you died
                 instead of leaving you at the spawn point. Needs a server that accepts the old position
-                as authoritative.
+                as authoritative. Firing a shot releases it too, the same way - the first shot after a
+                respawn performs the rewind instead of doing nothing.
             </div>
         </div>
         <div>

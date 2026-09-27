@@ -309,25 +309,40 @@ public class CsmcBlinkController {
      * <p>
      * Releasing here puts the held history and the position claimed right now in front of that
      * dispatch, in the same frame, microseconds earlier, which is as early as it can get.
+     * <p>
+     * A shot also supersedes a rewind. While a rewind is pending the module is not buffering - it is
+     * holding the buffer it recorded before the death on purpose, waiting for a recall - so this used
+     * to return early and the first shot after a respawn released nothing at all: the server kept the
+     * respawn position, which it is authoritative about, and dragged the player back there. Now the
+     * pending rewind is released the way {@link #recall()} releases it, buffer only, because the
+     * positions it holds were recorded by the player that died and the position you are standing in
+     * is the respawn point the rewind exists to undo. Reporting that alongside them would put the
+     * respawn point last, which is precisely the observed bug.
      */
     private void onBeforeUpdateDisplay() {
         CsmcBlinkConfig config = ConfigStore.instance.getConfig().csmcBlinkConfig;
-        if (mc.player == null || mc.player != trackedPlayer || rewindPending) {
+        if (mc.player == null || mc.player != trackedPlayer || !config.enabled) {
             return;
         }
-        if (!config.enabled || !armed) {
+        // nothing is buffered while a rewind is pending, so armed is false - but the shot still has
+        // to go through, because the buffer the rewind holds is all there is to release
+        if (!armed && !rewindPending) {
             return;
         }
         if (!config.flushOnShoot || !isFiring()) {
             return;
         }
+
+        boolean rewind = rewindPending;
+        boolean includeCurrentPosition = !rewind;
         if (config.debugLogging) {
-            logger.info("csmc-blink firing -> flush {} packets, drift={} playerPos={}/{}/{}",
+            logger.info("csmc-blink firing -> flush {} packets, drift={} playerPos={}/{}/{} rewind={} currentPosition={}",
                     packets.size(), round(getServerDistance()),
-                    round(mc.player.getX()), round(mc.player.getY()), round(mc.player.getZ()));
+                    round(mc.player.getX()), round(mc.player.getY()), round(mc.player.getZ()),
+                    rewind, includeCurrentPosition);
         }
         countRelease("firing");
-        release(true, true);
+        release(true, includeCurrentPosition);
     }
 
     /** What the shot flush is looking at, so a log line says which of its conditions is failing. */
