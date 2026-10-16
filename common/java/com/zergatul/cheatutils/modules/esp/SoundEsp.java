@@ -7,7 +7,6 @@ import com.zergatul.cheatutils.configs.SoundEspConfig;
 import com.zergatul.cheatutils.modules.utilities.RenderUtilities;
 import com.zergatul.cheatutils.render.LineRenderer;
 import com.zergatul.cheatutils.common.events.RenderWorldLastEvent;
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.resources.sounds.EntityBoundSoundInstance;
@@ -329,7 +328,7 @@ public class SoundEsp {
         closeCsv();
         csvFailed = false;
         try {
-            Path dir = FabricLoader.getInstance().getGameDir().resolve("sound_debug");
+            Path dir = Minecraft.getInstance().gameDirectory.toPath().resolve("sound_debug");
             Files.createDirectories(dir);
             String file = "sounds_" + Instant.now().toString().replace(':', '-') + ".csv";
             csvWriter = Files.newBufferedWriter(
