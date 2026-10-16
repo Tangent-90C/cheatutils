@@ -63,6 +63,11 @@ public class CsmcNoRecoilController {
         // every flag must die with the module: the hooks live inside CSMC's own code path, so without
         // this gate a "disabled" module would keep reshaping shot direction
         boolean active = config.enabled && mc.player != null;
+        if (!config.enabled && snapshotValid) {
+            // no fresh snapshot will be taken while disabled - invalidating here stops
+            // the send-side rotation override from using a frozen one
+            snapshotValid = false;
+        }
         // punch scale: dead aim zeroes it (stream sits low), every other mode keeps it. Locked precise
         // goes further: the shot direction itself is rebuilt from the pre-punch aim snapshot, so the
         // direction leaving the client is the crosshair automatically - no tuning.
@@ -143,7 +148,11 @@ public class CsmcNoRecoilController {
      * what the server gets".
      */
     private void onBeforeSendPosition() {
-        if (!snapshotValid || mc.player == null || !ConfigStore.instance.getConfig().csmcNoRecoilConfig.sendCleanRotation) {
+        // the master switch decides too: a disabled module must not keep rewriting the
+        // outgoing rotation from a stale snapshot
+        if (!ConfigStore.instance.getConfig().csmcNoRecoilConfig.enabled
+                || !snapshotValid || mc.player == null
+                || !ConfigStore.instance.getConfig().csmcNoRecoilConfig.sendCleanRotation) {
             return;
         }
         sending = true;

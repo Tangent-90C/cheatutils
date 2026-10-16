@@ -24,9 +24,13 @@ public class AimAssistConfig implements ModuleStateProvider, ValidatableConfig {
 
     public boolean aimCorrection;
     public boolean bulletDropCompensation;
+    // mortar-style high-arc variant of bulletDropCompensation
+    public boolean mortarArc;
     public String aimControlMode;
     public ImmutableList<Class<?>> targetClasses;
     public String aimAt;
+    // percent of newly locked Auto targets aimed at the head instead of a random body point
+    public int autoHeadChance;
     public double range;
     public int rotationSpeed;
     public int fov;
@@ -50,6 +54,7 @@ public class AimAssistConfig implements ModuleStateProvider, ValidatableConfig {
         // players only, so passive mobs like chickens are never picked up
         targetClasses = ImmutableList.from(Player.class);
         aimAt = AimAtAuto;
+        autoHeadChance = 0;
         range = 128;
         rotationSpeed = 600;
         fov = 120;
@@ -111,6 +116,7 @@ public class AimAssistConfig implements ModuleStateProvider, ValidatableConfig {
         // classes become null when a mod that provided them is removed
         targetClasses = targetClasses.removeIf(Objects::isNull);
         range = MathUtils.clamp(range, 1, 1024);
+        autoHeadChance = MathUtils.clamp(autoHeadChance, 0, 100);
         // 0 disables the stepping, the aim point is applied as is
         rotationSpeed = MathUtils.clamp(rotationSpeed, 0, 3600);
         fov = MathUtils.clamp(fov, 1, 360);

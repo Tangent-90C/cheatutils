@@ -1,10 +1,13 @@
 <div class="module-main" v-if="config">
     <div class="description">
-        Marks positions of sounds received from the server (gunshots, footsteps, etc.) with Entity-ESP style boxes and tracers.
-        Color = sound category (players / hostile / neutral / blocks / voice).
-        <span style="color: #40ff40;">Green box</span> = player entity spawned on the client.
-        Sound markers appearing before the green box of the same player indicate server-side entity spawn delay.
-        All events are also logged to <b>sound_debug/*.csv</b> in the game directory for offline lag analysis.
+        Marks the position of every sound listed below with Entity-ESP style boxes and tracers. Sounds that are
+        not in the list are never marked, and every rule that is in effect is a row here - a pattern such as
+        <b>minecraft:counterstrike.weapons.*</b> stands for every sound with that prefix, and a longer pattern
+        wins over a shorter one (that is how <b>weapons.fx.*</b> separates bullet impacts from gunfire).
+        Each row has its own settings: whether to draw the marker and its tracer, through walls,
+        only while the position is blocked, the shape, how far the marker is moved down
+        (gunshots play at the shooter's head, so 1.6 puts the box back around the player),
+        and its own color, which overrides the one derived from the sound.
     </div>
 
     <div class="module-sections">
@@ -16,22 +19,30 @@
             <legend>
                 Rendering
             </legend>
-            <div>
-                <switch-checkbox v-model="config.showMarkers" @change="update()">Draw boxes</switch-checkbox>
-            </div>
-            <div>
-                <switch-checkbox v-model="config.drawTracers" @change="update()">Draw tracers</switch-checkbox>
-            </div>
             <table>
                 <tr>
                     <td>
                         <span class="field-description">Duration:</span>
                     </td>
                     <td>
-                        <input type="text" class="w3" v-model="config.markerDuration" @change="update()">
+                        <input type="text" class="w5" v-model="config.markerDuration" @change="update()">
                     </td>
                     <td>
-                        <div class="input-description">Seconds markers stay visible</div>
+                        <div class="input-description">Seconds markers stay visible - decimals allowed, e.g. 0.2</div>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <span class="field-description">Own sound radius:</span>
+                    </td>
+                    <td>
+                        <input type="text" class="w5" v-model="config.ownSoundDistance" @change="update()">
+                    </td>
+                    <td>
+                        <div class="input-description">
+                            Sounds without an entity that play closer than this are treated as your own
+                            (your gun, UI) and never marked. 0 disables the check.
+                        </div>
                     </td>
                 </tr>
             </table>
@@ -39,21 +50,144 @@
 
         <fieldset>
             <legend>
-                Categories
+                Logging
             </legend>
             <div>
-                <switch-checkbox v-model="config.markPlayerSpawn" @change="update()">Mark player entity spawn (green)</switch-checkbox>
+                <switch-checkbox v-model="config.writeCsv" @change="update()">Write CSV log (game dir /sound_debug)</switch-checkbox>
             </div>
             <div>
-                <switch-checkbox v-model="config.showEntitySoundPackets" @change="update()">Mark entity-bound sound packets (server sounds without xyz)</switch-checkbox>
-            </div>
-            <div>
-                <switch-checkbox v-model="config.skipMusic" @change="update()">Skip music / records</switch-checkbox>
+                <switch-checkbox v-model="config.debug" @change="update()">Debug logging</switch-checkbox>
             </div>
         </fieldset>
 
-        <div>
-            <switch-checkbox v-model="config.writeCsv" @change="update()">Write CSV log (game dir /sound_debug)</switch-checkbox>
-        </div>
+        <template v-if="state == 'list'">
+            <fieldset>
+                <legend>
+                    Sounds
+                </legend>
+                <div class="actions">
+                    <button class="action" @click="openAdd()">Add Sound</button>
+                </div>
+                <div class="entity-list sound-list">
+                    <table>
+                        <tr v-for="entry in sounds" :key="entry.id">
+                            <td>
+                                <div>{{ entry.id }}</div>
+                                <div class="smaller" v-if="isWildcard(entry.id)">pattern - matches every sound with this prefix</div>
+                            </td>
+                            <td>
+                                <switch-checkbox v-model="entry.enabled" @change="update()">Enabled</switch-checkbox>
+                            </td>
+                            <td>
+                                <color-box :color="entry.color != null ? entry.color : 0"></color-box>
+                            </td>
+                            <td class="last-cell">
+                                <div class="v-buttons">
+                                    <button class="edit" @click="openEdit(entry.id)">Edit</button>
+                                    <button class="remove" @click="remove(entry.id)">Remove</button>
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="section-description" v-if="sounds.length == 0">
+                    No sounds configured - nothing will be marked.
+                </div>
+            </fieldset>
+        </template>
+
+        <template v-if="state == 'add'">
+            <fieldset>
+                <legend>
+                    Add Sound
+                </legend>
+                <div class="actions">
+                    <button class="action" @click="backToList()">Back</button>
+                </div>
+                <div class="filter">
+                    <span class="text">Pattern:</span>
+                    <input type="text" class="w10" v-model="newId" placeholder="minecraft:counterstrike.weapons.fx.tink.*">
+                    <button class="action" @click="addPattern()">Add pattern</button>
+                </div>
+                <div class="filter">
+                    <span class="text">Filter:</span>
+                    <input type="text" class="search" v-model="search">
+                </div>
+                <div class="entity-list sound-list">
+                    <table>
+                        <tr v-for="id in availableSounds" :key="id">
+                            <td>
+                                <div>{{ id }}</div>
+                            </td>
+                            <td class="last-cell">
+                                <button class="edit" @click="add(id)">Add</button>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </fieldset>
+        </template>
+
+        <template v-if="state == 'edit' && selected != null">
+            <fieldset>
+                <legend>
+                    Edit Sound
+                </legend>
+                <div class="actions">
+                    <button class="action" @click="backToList()">Back</button>
+                    <button class="action" @click="remove(selected.id)">Remove</button>
+                </div>
+                <div class="section-description">
+                    {{ selected.id }}
+                </div>
+                <div>
+                    <switch-checkbox v-model="selected.enabled" @change="update()">Enabled</switch-checkbox>
+                </div>
+                <div>
+                    <switch-checkbox v-model="selected.drawMarker" @change="update()">Draw marker</switch-checkbox>
+                </div>
+                <div>
+                    <switch-checkbox v-model="selected.drawTracer" @change="update()">Draw tracers</switch-checkbox>
+                </div>
+                <div>
+                    <switch-checkbox v-model="selected.throughWalls" @change="update()">Draw through walls</switch-checkbox>
+                </div>
+                <div>
+                    <switch-checkbox v-model="selected.onlyNotVisible" @change="update()">Only sounds you cannot see</switch-checkbox>
+                </div>
+                <table>
+                    <tr>
+                        <td>
+                            <span class="field-description">Shape:</span>
+                        </td>
+                        <td>
+                            <select v-model="editShape" @change="update()">
+                                <option :value="0">Box</option>
+                                <option :value="1">Ring on the ground</option>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span class="field-description">Move down:</span>
+                        </td>
+                        <td>
+                            <input type="text" class="w5" v-model="editOffset" @change="update()">
+                        </td>
+                        <td>
+                            <div class="input-description">
+                                Blocks to shift the marker down. Gunshots play at the shooter's head,
+                                so 1.6 puts the box back around the player.
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+                <color-picker
+                    :model-value="selected.color != null ? selected.color : 0"
+                    @update:model-value="setColor(selected, $event)">
+                </color-picker>
+                <button class="action" @click="clearColor(selected)">Use category color</button>
+            </fieldset>
+        </template>
     </div>
 </div>

@@ -2,6 +2,7 @@ package com.zergatul.cheatutils.modules.esp;
 
 import com.zergatul.cheatutils.common.Events;
 import com.zergatul.cheatutils.configs.ConfigStore;
+import com.zergatul.cheatutils.configs.SoundEntry;
 import com.zergatul.cheatutils.configs.SoundEspConfig;
 import com.zergatul.cheatutils.modules.utilities.RenderUtilities;
 import com.zergatul.cheatutils.render.LineRenderer;
@@ -12,18 +13,17 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.resources.sounds.EntityBoundSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import com.zergatul.cheatutils.mixins.common.accessors.EntityBoundSoundInstanceAccessor;
-import net.minecraft.network.Connection;
-import net.minecraft.network.protocol.game.ClientboundSoundEntityPacket;
-import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.awt.Color;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -35,16 +35,17 @@ import java.util.ArrayDeque;
 import java.util.UUID;
 
 /**
- * Marks positions of sounds the server explicitly sends with xyz coordinates
- * (ClientboundSoundPacket - usually actions of hidden/removed entities), and logs
- * every sound event to CSV together with player entity spawn events, so
- * sound-to-entity lag can be measured offline.
+ * Marks positions of sounds with Entity-ESP style boxes and tracers.
  *
- * Sound sources are separated by path:
- * - PACKET_COORD: server sound packet with explicit xyz - marked in the world
- * - PACKET_ENTITY: server sound packet bound to an entity id - optional marking
- * - LOCAL: anything played through SoundEngine without such packets (own sounds,
- *   UI, client-predicted sounds) - CSV only, never marked
+ * There is exactly one source: every sound the sound engine starts, hooked at
+ * SoundEngine.play. Mods that replay sounds without a server packet end up there too -
+ * CSMC plays enemy gunshots locally as custom AbstractSoundInstance subclasses, and no
+ * sound packet is ever sent for them.
+ *
+ * Which sounds get a marker is decided by one list, SoundEspConfig.sounds. Each entry has
+ * an id (a trailing "*" matches by prefix), its own render switches - marker, tracer,
+ * through walls, only-when-not-visible - and a color. A sound with no entry is never
+ * marked - there is no default beyond the entries shipped with the config.
  */
 public class SoundEsp {
 
@@ -61,107 +62,45 @@ public class SoundEsp {
     private final Minecraft mc = Minecraft.getInstance();
     private final ArrayDeque<Marker> markers = new ArrayDeque<>();
 
-    private final java.util.Map<MarkerKey, Marker> lastFrameMarker = new java.util.HashMap<>();
+    private int errorCount;
+    private int soundCount;
+    private int addedMarkerCount;
+    private int ownOrNearSkippedCount;
+    private long lastStatsNanos;
 
     private BufferedWriter csvWriter;
     private boolean csvFailed;
-    private long sessionNanos;
 
     private SoundEsp() {
         Events.AfterRenderWorld.add(this::onRenderWorld);
         Events.ClientTickEnd.add(this::onClientTickEnd);
-        Events.EntityAdded.add(this::onEntityAdded);
-        Events.ClientPlayerLoggingIn.add(this::onLoggingIn);
-        Events.ClientPlayerLoggingOut.add(this::onLoggingOut);
-        Events.LevelUnload.add(this::onLevelUnload);
     }
 
     // region capture
 
-    /** Sound packet with explicit xyz coordinates - the only source marked in the world. */
-    public void onServerCoordinateSound(ClientboundSoundPacket packet) {
-        SoundEspConfig config = getConfig();
-        if (!config.enabled || mc.level == null) {
-            return;
-        }
-
-        try {
-            ResourceLocation location = packet.getSound().value().location();
-            Vec3 pos = new Vec3(packet.getX(), packet.getY(), packet.getZ());
-            long now = System.nanoTime();
-            LOGGER.info("SoundEsp coordinate sound packet: {} at {}, {}, {}", location, pos.x, pos.y, pos.z);
-
-            Marker marker = new Marker(
-                    pos, location, packet.getSource(),
-                    packet.getVolume(), packet.getPitch(),
-                    false, false,
-                    null, null, now);
-            addMarker(marker);
-
-            if (config.writeCsv) {
-                writeCsv("SOUND_PACKET_COORD", location.toString(), packet.getSource().getName(),
-                        marker, false);
-            }
-        } catch (Throwable t) {
-            // never break packet processing because of our tooling
-        }
-    }
-
-    /** Sound packet bound to an entity id (position read from the entity object). */
-    public void onServerEntitySound(ClientboundSoundEntityPacket packet) {
-        SoundEspConfig config = getConfig();
-        if (!config.enabled || mc.level == null) {
-            return;
-        }
-
-        try {
-            ResourceLocation location = packet.getSound().value().location();
-            LOGGER.info("SoundEsp entity sound packet: {}", location);
-            Vec3 pos = null;
-            UUID uuid = null;
-            Entity entity = mc.level.getEntity(packet.getId());
-            if (entity != null) {
-                pos = entity.position();
-                uuid = entity.getUUID();
-            }
-
-            if (config.writeCsv) {
-                long now = System.nanoTime();
-                Marker marker = new Marker(
-                        pos != null ? pos : Vec3.ZERO, location, packet.getSource(),
-                        packet.getVolume(), packet.getPitch(),
-                        false, false,
-                        uuid, pos, now);
-                writeCsv("SOUND_PACKET_ENTITY", location.toString(), packet.getSource().getName(),
-                        marker, uuid != null);
-            }
-
-            if (config.showEntitySoundPackets && pos != null) {
-                long now = System.nanoTime();
-                Marker marker = new Marker(
-                        pos, location, packet.getSource(),
-                        packet.getVolume(), packet.getPitch(),
-                        false, false,
-                        uuid, pos, now);
-                addMarker(marker);
-            }
-        } catch (Throwable t) {
-            // ignore
-        }
-    }
-
     /**
-     * Catch-all: any sound instance the engine asks for a position, including mods that
-     * bypass vanilla sound packets. Marked only for sounds that are not the local player's
-     * own (position == player position is treated as own sound) and only once per tick.
+     * Every sound the engine starts. Marked when the config lists it and it is not the
+     * local player's own sound.
      */
-    public void onActiveSound(SoundInstance sound) {
+    public void onSoundPlayed(SoundInstance sound) {
         SoundEspConfig config = getConfig();
         if (!config.enabled || mc.level == null || sound == null) {
             return;
         }
 
         try {
+            soundCount++;
+
+            String id = sound.getLocation().toString();
+            SoundEntry entry = config.findSound(id);
+            if (entry == null || !entry.enabled) {
+                return;
+            }
+
+            if (config.debug) {
+                LOGGER.info("SoundEsp sound: {} at {}", id, formatPos(new Vec3(sound.getX(), sound.getY(), sound.getZ())));
+            }
+
             UUID entityUuid = null;
             Vec3 entityPos = null;
             if (sound instanceof EntityBoundSoundInstance bound) {
@@ -170,47 +109,40 @@ public class SoundEsp {
                     entityUuid = entity.getUUID();
                     entityPos = entity.position();
                     if (entity == mc.player) {
+                        ownOrNearSkippedCount++;
                         return; // own sound
                     }
                 }
             }
 
+            LocalPlayer player = mc.player;
             Vec3 pos = new Vec3(sound.getX(), sound.getY(), sound.getZ());
-            if (entityUuid == null && mc.player != null && pos.distanceToSqr(mc.player.position()) < 4) {
+            double ownDistanceSqr = config.ownSoundDistance * config.ownSoundDistance;
+            if (entityUuid == null && config.ownSoundDistance >= 0 && player != null
+                    && pos.distanceToSqr(player.position()) < ownDistanceSqr) {
+                ownOrNearSkippedCount++;
                 return; // non-entity sound right next to us - almost certainly own/UI
             }
 
-            MarkerKey key = new MarkerKey(sound.getLocation(), sound.getSource(), pos);
-            long now = System.nanoTime();
-            Marker active = lastFrameMarker.get(key);
-            if (active != null && now - active.time < 50_000_000L) {
-                return; // same sound still playing, already logged this ~3 ticks
-            }
-
-            Marker marker = new Marker(
-                    pos, sound.getLocation(), sound.getSource(),
-                    sound.getVolume(), sound.getPitch(),
-                    false, false,
-                    entityUuid, entityPos, now);
-            lastFrameMarker.put(key, marker);
-            addMarker(marker);
+            addMarker(new Marker(pos, sound.getLocation(), sound.getSource(), entityUuid, entityPos, System.nanoTime()));
+            addedMarkerCount++;
 
             if (config.writeCsv) {
-                writeCsv("SOUND_ACTIVE", sound.getLocation().toString(), sound.getSource().getName(),
-                        marker, entityUuid != null);
+                writeCsv("SOUND", id, sound.getSource().getName(),
+                        new Marker(pos, sound.getLocation(), sound.getSource(), entityUuid, entityPos, System.nanoTime()),
+                        entityUuid != null);
             }
         } catch (Throwable t) {
-            // ignore
+            logError("sound", t);
         }
     }
 
-    /** Any sound played locally through SoundEngine - CSV only, never marked. */
+    /** Every sound played locally through SoundEngine - CSV only, never marked. */
     public void onLocalSoundInstance(SoundInstance sound) {
         SoundEspConfig config = getConfig();
-        if (!config.enabled || mc.level == null || sound == null) {
+        if (!config.enabled || !config.writeCsv || mc.level == null || sound == null) {
             return;
         }
-        LOGGER.info("SoundEsp local sound: {}", sound.getLocation());
 
         try {
             Vec3 pos = new Vec3(sound.getX(), sound.getY(), sound.getZ());
@@ -224,49 +156,17 @@ public class SoundEsp {
                 }
             }
 
-            if (config.writeCsv) {
-                long now = System.nanoTime();
-                Marker marker = new Marker(
-                        pos, sound.getLocation(), sound.getSource(),
-                        sound.getVolume(), sound.getPitch(),
-                        sound.isRelative(), false,
-                        entityUuid, entityPos, now);
-                writeCsv("SOUND_LOCAL", sound.getLocation().toString(), sound.getSource().getName(),
-                        marker, entityUuid != null);
-            }
-        } catch (Throwable t) {
-            // ignore
-        }
-    }
-
-    private void onEntityAdded(Entity entity) {
-        SoundEspConfig config = getConfig();
-        if (!config.enabled || !config.markPlayerSpawn || mc.level == null) {
-            return;
-        }
-        if (!(entity instanceof Player) || entity instanceof LocalPlayer) {
-            return;
-        }
-
-        try {
-            Vec3 pos = entity.position();
             long now = System.nanoTime();
-            Marker marker = new Marker(
-                    pos, null, SoundSource.PLAYERS,
-                    1, 1, false, true,
-                    entity.getUUID(), pos, now);
-            addMarker(marker);
-
-            if (config.writeCsv) {
-                writeCsv("PLAYER_ADD", "entity_spawn", SoundSource.PLAYERS.getName(), marker,
-                        true);
-            }
+            writeCsv("SOUND_LOCAL", sound.getLocation().toString(), sound.getSource().getName(),
+                    new Marker(pos, sound.getLocation(), sound.getSource(), entityUuid, entityPos, now),
+                    entityUuid != null);
         } catch (Throwable t) {
-            // ignore
+            logError("local sound", t);
         }
     }
 
     private void addMarker(Marker marker) {
+        marker.color = colorFor(marker);
         markers.addLast(marker);
         while (markers.size() > MAX_MARKERS) {
             markers.removeFirst();
@@ -285,90 +185,145 @@ public class SoundEsp {
 
         long now = System.nanoTime();
         pruneMarkers(now);
-
-        boolean drawBoxes = config.showMarkers;
-        boolean drawTracers = config.drawTracers;
-        if (!drawBoxes && !drawTracers) {
+        if (markers.isEmpty()) {
             return;
         }
 
         LineRenderer renderer = RenderUtilities.instance.getLineRenderer();
-        renderer.begin(event, true);
 
-        for (Marker marker : markers) {
-            long remain = marker.time + config.markerDuration * NANOS_PER_SECOND - now;
-            float alpha = (float) remain / NANOS_PER_SECOND; // fade during the last second
-            if (alpha > 1) {
-                alpha = 1;
+        // depth test is a setting of the whole line batch, so entries that draw through
+        // walls need their own pass - drawn last, so nothing covers them
+        for (int pass = 0; pass < 2; pass++) {
+            boolean throughWallsPass = pass == 1;
+
+            boolean any = false;
+            for (Marker marker : markers) {
+                SoundEntry entry = config.findSound(entryId(marker));
+                if ((entry == null || entry.throughWalls) == throughWallsPass) {
+                    any = true;
+                    break;
+                }
             }
-            if (alpha <= 0) {
+            if (!any) {
                 continue;
             }
 
-            if (config.skipMusic &&
-                    (marker.source == SoundSource.MUSIC || marker.source == SoundSource.RECORDS)) {
-                continue;
+            renderer.begin(event, !throughWallsPass);
+            for (Marker marker : markers) {
+                SoundEntry entry = config.findSound(entryId(marker));
+                if ((entry == null || entry.throughWalls) != throughWallsPass) {
+                    continue;
+                }
+                drawMarker(renderer, config, event, marker, entry, now);
             }
-
-            float[] rgb = markerColor(marker);
-            float r = rgb[0];
-            float g = rgb[1];
-            float b = rgb[2];
-
-            if (drawBoxes) {
-                renderer.cuboid(
-                        marker.pos.x - BOX_HALF_WIDTH, marker.pos.y, marker.pos.z - BOX_HALF_WIDTH,
-                        marker.pos.x + BOX_HALF_WIDTH, marker.pos.y + BOX_HEIGHT, marker.pos.z + BOX_HALF_WIDTH,
-                        r, g, b, alpha);
-            }
-
-            if (drawTracers) {
-                Vec3 tracerCenter = event.getTracerCenter();
-                renderer.line(
-                        tracerCenter.x, tracerCenter.y, tracerCenter.z,
-                        r, g, b, alpha,
-                        marker.pos.x, marker.pos.y + BOX_HEIGHT / 2, marker.pos.z,
-                        r, g, b, alpha);
-            }
+            renderer.end();
         }
-
-        renderer.end();
     }
 
-    private float[] markerColor(Marker marker) {
-        if (marker.isPlayerSpawn) {
-            return new float[]{0.2f, 1f, 0.2f};                 // green
+    private static String entryId(Marker marker) {
+        return marker.location == null ? null : marker.location.toString();
+    }
+
+    /** One marker in one depth pass: fade, the entry's visibility filter, shape, tracer. */
+    private void drawMarker(LineRenderer renderer, SoundEspConfig config, RenderWorldLastEvent event,
+                            Marker marker, SoundEntry entry, long now) {
+        long remain = marker.time + (long) (config.markerDuration * NANOS_PER_SECOND) - now;
+        float alpha = (float) remain / NANOS_PER_SECOND; // fade during the last second
+        if (alpha > 1) {
+            alpha = 1;
+        }
+        if (alpha <= 0) {
+            return;
+        }
+
+        boolean drawMarker = entry == null || entry.drawMarker;
+        boolean drawTracer = entry == null || entry.drawTracer;
+        if (!drawMarker && !drawTracer) {
+            return;
+        }
+
+        if (entry != null && entry.onlyNotVisible && isVisible(marker.pos)) {
+            return;
+        }
+
+        double offset = entry != null ? entry.offsetYOrDefault() : 0.0;
+        boolean ring = entry != null && entry.shapeOrDefault() == SoundEntry.SHAPE_RING;
+        double x = marker.pos.x;
+        double y = marker.pos.y - offset;
+        double z = marker.pos.z;
+
+        float r = marker.color.getRed() / 255f;
+        float g = marker.color.getGreen() / 255f;
+        float b = marker.color.getBlue() / 255f;
+
+        if (drawMarker) {
+            if (ring) {
+                drawRing(renderer, x, y, z, r, g, b, alpha);
+            } else {
+                renderer.cuboid(
+                        x - BOX_HALF_WIDTH, y, z - BOX_HALF_WIDTH,
+                        x + BOX_HALF_WIDTH, y + BOX_HEIGHT, z + BOX_HALF_WIDTH,
+                        r, g, b, alpha);
+            }
+        }
+        if (drawTracer) {
+            Vec3 tracerCenter = event.getTracerCenter();
+            renderer.line(
+                    tracerCenter.x, tracerCenter.y, tracerCenter.z,
+                    r, g, b, alpha,
+                    x, y + BOX_HEIGHT / 2, z,
+                    r, g, b, alpha);
+        }
+    }
+
+    /** Color of a marker: the entry's own color when it has one, the category color otherwise. */
+    private Color colorFor(Marker marker) {
+        SoundEntry entry = marker.location == null ? null : getConfig().findSound(marker.location.toString());
+        if (entry != null && entry.color != null) {
+            return entry.color;
         }
         return switch (marker.source) {
-            case PLAYERS -> new float[]{1f, 0.25f, 0.25f};      // red
-            case HOSTILE -> new float[]{1f, 0.6f, 0.1f};        // orange
-            case NEUTRAL -> new float[]{1f, 1f, 0.2f};          // yellow
-            case BLOCKS -> new float[]{0.6f, 0.6f, 0.6f};       // gray
-            case VOICE -> new float[]{0.4f, 0.6f, 1f};          // blue
-            default -> new float[]{0.2f, 0.9f, 0.9f};           // cyan
+            case PLAYERS -> new Color(255, 64, 64);   // red
+            case HOSTILE -> new Color(255, 153, 26);  // orange
+            case NEUTRAL -> new Color(255, 255, 51);  // yellow
+            case BLOCKS -> new Color(153, 153, 153);  // gray
+            case VOICE -> new Color(102, 153, 255);   // blue
+            default -> new Color(51, 230, 230);       // cyan
         };
+    }
+
+    /**
+     * Can the player see this point? A single raycast from the eyes to the sound position -
+     * a hit means a block is in the way, so the sound is one you hear but cannot see.
+     */
+    private boolean isVisible(Vec3 pos) {
+        LocalPlayer player = mc.player;
+        if (player == null || mc.level == null) {
+            return false;
+        }
+        Vec3 eye = player.getEyePosition();
+        ClipContext context = new ClipContext(eye, pos, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player);
+        return mc.level.clip(context).getType() == HitResult.Type.MISS;
+    }
+
+    /** Circle on the ground at the sound position - LineRenderer only draws lines. */
+    private void drawRing(LineRenderer renderer, double x, double y, double z,
+                          float r, float g, float b, float a) {
+        final int segments = 24;
+        for (int i = 0; i < segments; i++) {
+            double a1 = 2 * Math.PI * i / segments;
+            double a2 = 2 * Math.PI * (i + 1) / segments;
+            renderer.line(
+                    x + Math.cos(a1) * BOX_HALF_WIDTH, y, z + Math.sin(a1) * BOX_HALF_WIDTH,
+                    r, g, b, a,
+                    x + Math.cos(a2) * BOX_HALF_WIDTH, y, z + Math.sin(a2) * BOX_HALF_WIDTH,
+                    r, g, b, a);
+        }
     }
 
     // endregion
 
     // region csv
-
-    private void onLoggingIn(Connection connection) {
-        SoundEspConfig config = getConfig();
-        sessionNanos = System.nanoTime();
-        if (!config.enabled || !config.writeCsv) {
-            return;
-        }
-        openCsv();
-    }
-
-    private void onLoggingOut() {
-        closeCsv();
-    }
-
-    private void onLevelUnload() {
-        closeCsv();
-    }
 
     private void openCsv() {
         closeCsv();
@@ -380,7 +335,7 @@ public class SoundEsp {
             csvWriter = Files.newBufferedWriter(
                     dir.resolve(file), StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-            csvWriter.write("epoch_ms,session_ms,type,sound_id,source,volume,pitch,x,y,z,relative,entity_uuid,entity_x,entity_y,entity_z");
+            csvWriter.write("epoch_ms,type,sound_id,source,x,y,z,entity_uuid,entity_x,entity_y,entity_z");
             csvWriter.newLine();
         } catch (IOException e) {
             csvFailed = true;
@@ -411,16 +366,12 @@ public class SoundEsp {
         try {
             StringBuilder sb = new StringBuilder(256);
             sb.append(System.currentTimeMillis()).append(',');
-            sb.append((System.nanoTime() - sessionNanos) / 1_000_000L).append(',');
             sb.append(type).append(',');
             appendCsvEscaped(sb, soundId).append(',');
             appendCsvEscaped(sb, sourceName).append(',');
-            sb.append(marker.volume).append(',');
-            sb.append(marker.pitch).append(',');
             sb.append(marker.pos.x).append(',');
             sb.append(marker.pos.y).append(',');
             sb.append(marker.pos.z).append(',');
-            sb.append(marker.relative).append(',');
             sb.append(marker.entityUuid != null ? marker.entityUuid : "").append(',');
             if (hasEntity && marker.entityPos != null) {
                 sb.append(marker.entityPos.x).append(',');
@@ -440,13 +391,12 @@ public class SoundEsp {
         if (value.indexOf(',') >= 0 || value.indexOf('"') >= 0) {
             return sb.append('"').append(value.replace("\"", "\"\"")).append('"');
         }
-        return sb.append(value);
+        return sb;
     }
 
     // endregion
 
     private void onClientTickEnd() {
-        // flush csv once per tick to keep file fresh without per-line syscalls
         if (csvWriter != null) {
             try {
                 csvWriter.flush();
@@ -454,11 +404,63 @@ public class SoundEsp {
                 csvFailed = true;
             }
         }
+
+        logStats();
+    }
+
+    /**
+     * Every 5 seconds, when debug logging is on: how many sounds the engine hook saw, how
+     * many became markers, and what the last one was. Sounds the hook never saw cannot be
+     * marked, so this separates "no sound arrived" from "sound arrived but was dropped".
+     */
+    private void logStats() {
+        if (!getConfig().debug) {
+            return;
+        }
+        long now = System.nanoTime();
+        if (lastStatsNanos == 0) {
+            lastStatsNanos = now;
+            return;
+        }
+        if (now - lastStatsNanos < 5 * NANOS_PER_SECOND) {
+            return;
+        }
+
+        Marker last = markers.peekLast();
+        String lastDesc = "none";
+        if (last != null) {
+            String dist = "?";
+            if (mc.player != null) {
+                dist = String.format("%.1f", Math.sqrt(last.pos.distanceToSqr(mc.player.position())));
+            }
+            lastDesc = String.format("%s at %s at %s blocks", last.location, formatPos(last.pos), dist);
+        }
+
+        LOGGER.info("SoundEsp stats: sounds={} markers={} skippedAsOwnOrNear={} live={} listed={} last={}",
+                soundCount, addedMarkerCount, ownOrNearSkippedCount, markers.size(),
+                getConfig().sounds == null ? 0 : getConfig().sounds.size(), lastDesc);
+        lastStatsNanos = now;
+    }
+
+    private static String formatPos(Vec3 pos) {
+        return String.format("(%.1f, %.1f, %.1f)", pos.x, pos.y, pos.z);
+    }
+
+    /**
+     * Sound hooks used to swallow their exceptions, which is why a silently failing mixin
+     * looked like "the module does nothing". Rate limited, so a broken path is visible
+     * without flooding the log when it fires per sound.
+     */
+    private void logError(String path, Throwable t) {
+        errorCount++;
+        if (errorCount <= 5 || errorCount % 500 == 0) {
+            LOGGER.info("SoundEsp {} failed ({})", path, errorCount);
+        }
     }
 
     private void pruneMarkers(long now) {
         SoundEspConfig config = getConfig();
-        long lifetime = config.markerDuration * NANOS_PER_SECOND;
+        long lifetime = (long) (config.markerDuration * NANOS_PER_SECOND);
         while (!markers.isEmpty() && now - markers.getFirst().time > lifetime) {
             markers.removeFirst();
         }
@@ -468,19 +470,24 @@ public class SoundEsp {
         return ConfigStore.instance.getConfig().soundEspConfig;
     }
 
-    private record MarkerKey(ResourceLocation location, SoundSource source, Vec3 pos) {
-    }
+    private static class Marker {
 
-    private record Marker(
-            Vec3 pos,
-            ResourceLocation location,
-            SoundSource source,
-            float volume,
-            float pitch,
-            boolean relative,
-            boolean isPlayerSpawn,
-            UUID entityUuid,
-            Vec3 entityPos,
-            long time) {
+        final Vec3 pos;
+        final ResourceLocation location;
+        final SoundSource source;
+        final UUID entityUuid;
+        final Vec3 entityPos;
+        final long time;
+        Color color;
+
+        Marker(Vec3 pos, ResourceLocation location, SoundSource source, UUID entityUuid,
+               Vec3 entityPos, long time) {
+            this.pos = pos;
+            this.location = location;
+            this.source = source;
+            this.entityUuid = entityUuid;
+            this.entityPos = entityPos;
+            this.time = time;
+        }
     }
 }

@@ -73,6 +73,7 @@ public class Config {
     public AimAssistConfig aimAssist = new AimAssistConfig();
     public CsmcNoRecoilConfig csmcNoRecoilConfig = new CsmcNoRecoilConfig();
     public CsmcBlinkConfig csmcBlinkConfig = new CsmcBlinkConfig();
+    public FakePingConfig fakePingConfig = new FakePingConfig();
 
     public Config() {
         esp = true;

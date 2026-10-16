@@ -73,6 +73,7 @@ public class Modules {
         register(RenderUtilities.instance);
         register(Containers.instance);
         register(AntiHunger.instance);
+        register(FakePing.instance);
         register(Schematica.instance);
         register(AimAssist.instance);
         register(LockInputs.instance);

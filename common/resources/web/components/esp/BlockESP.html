@@ -141,6 +141,7 @@
                 <div class="flex-row">
                     <span class="field-description">Max Distance:</span>
                     <input type="text" class="w5" v-model="selectedConfig.maxDistance" @change="update(selectedConfig)">
+                    <div class="input-description">0 or negative is treated as 1000 (no limit)</div>
                 </div>
                 <fieldset>
                     <legend>

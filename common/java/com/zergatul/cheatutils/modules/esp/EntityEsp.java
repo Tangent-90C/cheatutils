@@ -200,7 +200,7 @@ public class EntityEsp implements Module {
             config = list.stream().filter(c ->
                     c.enabled &&
                             c.drawTracers &&
-                            c.clazz.isInstance(entity) &&
+                            c.isValidEntity(entity) &&
                             distanceSqr < c.getTracerMaxDistanceSqr()).findFirst().orElse(null);
 
             if (config != null && !isTracerDisabledFromScript(config, entity)) {

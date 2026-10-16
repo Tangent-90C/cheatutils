@@ -101,7 +101,9 @@
                     </div>
                     <div class="section-description">
                         Which part of the hitbox to aim at.<br>
-                        <b>Auto</b> - aims at whatever point of the hitbox is closest to your crosshair.<br>
+                        <b>Auto</b> - aims at a random point inside the target's body: the point is
+                        rolled once when a target is acquired, kept while the same target stays locked,
+                        and rolled again when you switch to another target.<br>
                         <b>Head</b> - aims at the target's eyes.<br>
                         <b>Center</b> - aims at the middle of the hitbox.<br>
                         <b>Feet</b> - aims at the bottom of the hitbox.<br>
@@ -109,6 +111,17 @@
                         The selected point is only a preference. If a block covers it, Aim Correction
                         falls back to another exposed part instead of dropping the target, so partially
                         visible entities are still attackable.
+                    </div>
+                    <div v-if="config.aimAt == 'Auto'">
+                        <div class="flex-row">
+                            <span class="field-description">Head Chance:</span>
+                            <input type="text" class="w3" v-model="config.autoHeadChance" @change="update()">
+                        </div>
+                        <div class="section-description">
+                            Percent of newly locked targets that Auto aims at the head (eyes) instead of
+                            a random body point. 0 never goes for the head, 100 always does. The roll
+                            happens once per target and stays while the target stays locked. Default: 0
+                        </div>
                     </div>
                 </fieldset>
                 <fieldset>
@@ -205,6 +218,19 @@
                         Guns whose built-in ballistic computer is enabled are skipped: that computer
                         already elevates shots to whatever the crosshair points at, and stacking both
                         would overshoot.
+                    </div>
+                    <div v-if="config.bulletDropCompensation">
+                        <switch-checkbox v-model="config.mortarArc" @change="update()">
+                            Mortar Arc
+                        </switch-checkbox>
+                        <div class="section-description">
+                            Fun mode: instead of the flat trajectory, aims along the high-arc solution of
+                            the same ballistic equation - the crosshair points steeply skyward and the
+                            bullet falls onto the target from above, like a mortar shell. Both solutions
+                            share the same maximum range, but the high arc flies many times longer.<br>
+                            Targets behind cover are still skipped while <b>Check Line of Sight</b> is on -
+                            untick it to lob shots over walls.
+                        </div>
                     </div>
                 </div>
             </div>

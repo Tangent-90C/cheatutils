@@ -82,6 +82,7 @@ public class ApiHandler implements HttpHandler {
                 ConfigStore.instance.getConfig().soundEspConfig = config;
             }
         });
+        apis.add(new SoundInfoApi());
         apis.add(new ProfilesApi());
         apis.add(new DebuggingApi());
         apis.add(new KillAuraCodeApi());
@@ -907,6 +908,18 @@ public class ApiHandler implements HttpHandler {
             @Override
             protected void setConfig(AntiHungerConfig config) {
                 ConfigStore.instance.getConfig().antiHungerConfig = config;
+            }
+        });
+
+        apis.add(new SimpleConfigApi<>("fake-ping", FakePingConfig.class) {
+            @Override
+            protected FakePingConfig getConfig() {
+                return ConfigStore.instance.getConfig().fakePingConfig;
+            }
+
+            @Override
+            protected void setConfig(FakePingConfig config) {
+                ConfigStore.instance.getConfig().fakePingConfig = config;
             }
         });
 

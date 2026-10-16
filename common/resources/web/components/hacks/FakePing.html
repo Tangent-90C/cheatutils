@@ -1,0 +1,27 @@
+<div class="module-main" v-if="config">
+    <div class="description">
+        Delays your keep-alive responses, so the server measures a higher latency for you. This raises the ping shown in the Tab player list (also for other players looking at you). The server measures latency itself, so it cannot be faked downwards; it also smooths the value, so the displayed ping rises over a few keep-alive cycles (~15 seconds each). A keep-alive response that arrives later than ~15 seconds gets you disconnected, which is why the delay is capped at 10000 ms.
+    </div>
+
+    <div class="module-sections">
+        <div>
+            <switch-checkbox v-model="config.enabled" @change="update()">Enabled</switch-checkbox>
+        </div>
+
+        <fieldset>
+            <legend>
+                Delay, ms
+            </legend>
+            <div>
+                <input type="text" class="w5" v-model="config.delay" @change="update()">
+            </div>
+            <div class="section-description">
+                0..10000; must stay below the server keep-alive timeout (~15 s). Tab ping converges to roughly this delay + your real ping.
+            </div>
+        </fieldset>
+
+        <div>
+            <switch-checkbox v-model="config.log" @change="update()">Log</switch-checkbox>
+        </div>
+    </div>
+</div>

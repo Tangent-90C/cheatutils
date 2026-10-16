@@ -491,27 +491,38 @@ public final class CsmcBallistics {
     }
 
     /**
-     * Pitch offset in radians that makes a projectile dropped by this gun's
-     * ballistics land on a point {@code horizontal} blocks away and
-     * {@code vertical} blocks above the eye. Negative result means aim up.
-     * Exact replication of CSMCMod's ballistic computer: low-arc solution of
-     * the projectile equation plus its +0.1° calibration bias. Null when
-     * there is no solution (target out of reach).
+     * Pitch correction, in radians, to add to the rotation that already points at the
+     * target. Negative looks up. This is the difference between the ballistic solution
+     * and the straight line to the target, not the solution itself: adding the whole
+     * elevation would double count it, because the aim rotation already aims at the
+     * target. Matches what CSMCMod's own ballistic computer would aim at, including its
+     * fixed calibration bias. Null when the target is out of reach.
+     *
+     * <p>{@code highArc} picks the mortar root of the same projectile equation instead
+     * of the flat one: the shot climbs steeply and falls onto the target from above.
+     * Both roots share the reach limit, so past maximum range this returns null either
+     * way, and inside it the high root always exists once the flat one does.
      */
-    public static Double pitchOffsetRadians(Ballistics ballistics, double horizontal, double vertical) {
+    public static Double pitchCorrectionRadians(Ballistics ballistics, double horizontal, double vertical, boolean highArc) {
         if (horizontal < 1e-6) {
             return null;
         }
         double v = ballistics.muzzleVelocity() / TICKS_PER_SECOND;
         double g = ballistics.gravity();
         double vv = v * v;
-        // discriminant of the low-arc projectile solution, height difference up-positive
+        // discriminant of the projectile solution, height difference up-positive
         double discriminant = vv * vv - g * g * horizontal * horizontal - 2 * g * vv * vertical;
         if (g <= 0 || discriminant < 0) {
             return null;
         }
-        double elevation = Math.atan((vv - Math.sqrt(discriminant)) / (g * horizontal));
-        return -elevation + Math.toRadians(CALIBRATION_DEGREES);
+        double root = highArc ? Math.sqrt(discriminant) : -Math.sqrt(discriminant);
+        // The calibration bias is flat-fire only: near vertical, a 0.1 degree pitch
+        // change swings tan(theta) by tens and would move the impact point by hundreds
+        // of blocks, so the high root gets the exact solution instead.
+        double solution = Math.atan((vv + root) / (g * horizontal))
+                - (highArc ? 0 : Math.toRadians(CALIBRATION_DEGREES));
+        double direct = Math.atan2(vertical, horizontal);
+        return direct - solution;
     }
 
     private static int readInt(byte[] data, int offset) {

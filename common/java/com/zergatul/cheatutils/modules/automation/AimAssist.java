@@ -11,7 +11,6 @@ import com.zergatul.cheatutils.controllers.NetworkPacketsController;
 import com.zergatul.cheatutils.mixins.common.accessors.KeyMappingAccessor;
 import com.zergatul.cheatutils.mixins.common.accessors.MouseHandlerAccessor;
 import com.zergatul.cheatutils.modules.Module;
-import com.zergatul.cheatutils.utils.MathUtils;
 import com.zergatul.cheatutils.utils.Rotation;
 import com.zergatul.cheatutils.utils.RotationUtils;
 import com.zergatul.cheatutils.utils.ServerBehavior;
@@ -42,6 +41,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 
 public class AimAssist implements Module {
 
@@ -50,6 +50,7 @@ public class AimAssist implements Module {
     private static final Logger LOGGER = LogManager.getLogger(AimAssist.class);
     private static final double TICKS_PER_SECOND = 20;
     private static final long DEBUG_INTERVAL_MS = 1000;
+    private static final Random RANDOM = new Random();
     /** How long the attack key stays down during one Combat Mode click, about a tick - close to a human click. */
     private static final long CLICK_HOLD_NANOS = 50_000_000L;
 
@@ -61,6 +62,11 @@ public class AimAssist implements Module {
 
     private Entity aimTarget;
     private Vec3 aimPoint;
+    private Entity randomAimEntity;
+    private boolean randomAimHead;
+    private double randomAimX;
+    private double randomAimY;
+    private double randomAimZ;
     private boolean aimCorrectionActive = true;
     private boolean combatModeActive = true;
     private Rotation aimRotation;
@@ -345,9 +351,11 @@ public class AimAssist implements Module {
 
     /**
      * Raises the aim rotation by the bullet drop of the held CSMC gun, so shots
-     * land on the target instead of under it. Guns that run CSMCMod's own
-     * ballistic computer are skipped: that computer already elevates every shot
-     * to whatever the crosshair points at, and stacking both would overshoot.
+     * land on the target instead of under it. Mortar Arc swaps the flat trajectory
+     * for the high-arc one, so the shot climbs and falls onto the target from above.
+     * Guns that run CSMCMod's own ballistic computer are skipped: that computer
+     * already elevates every shot to whatever the crosshair points at, and stacking
+     * both would overshoot.
      */
     private Rotation applyBulletDrop(Rotation target) {
         AimAssistConfig config = ConfigStore.instance.getConfig().aimAssist;
@@ -377,8 +385,8 @@ public class AimAssist implements Module {
 
         Vec3 delta = aimPoint.subtract(mc.player.getEyePosition());
         double horizontal = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
-        Double offset = CsmcBallistics.pitchOffsetRadians(ballistics, horizontal, delta.y);
-        if (offset == null) {
+        Double correction = CsmcBallistics.pitchCorrectionRadians(ballistics, horizontal, delta.y, config.mortarArc);
+        if (correction == null) {
             debugDropReason("no_solution");
             return target;
         }
@@ -386,9 +394,11 @@ public class AimAssist implements Module {
         debugDrop("vel=" + Math.round(ballistics.muzzleVelocity())
                 + " grav=" + ballistics.gravity()
                 + " dist=" + Math.round(horizontal)
-                + " pitch=" + String.format("%.2f", Math.toDegrees(offset)));
+                + " drop=" + Math.round(delta.y)
+                + " arc=" + (config.mortarArc ? "high" : "flat")
+                + " pitch=" + String.format("%.2f", Math.toDegrees(correction)));
         return new Rotation(
-                Mth.clamp((float) (target.xRot() + Math.toDegrees(offset)), -90.0F, 90.0F),
+                Mth.clamp((float) (target.xRot() + Math.toDegrees(correction)), -90.0F, 90.0F),
                 target.yRot());
     }
 
@@ -643,23 +653,43 @@ public class AimAssist implements Module {
             case AimAssistConfig.AimAtHead -> entity.getEyePosition();
             case AimAssistConfig.AimAtCenter -> entity.getBoundingBox().getCenter();
             case AimAssistConfig.AimAtFeet -> entity.position().add(0, 0.001, 0);
-            default -> closestAimPoint(entity);
+            default -> randomAimPoint(entity);
         };
     }
 
-    private Vec3 closestAimPoint(Entity entity) {
-        Vec3 eyes = mc.player.getEyePosition();
+    /**
+     * Auto aim point: a random spot inside the target's hitbox, rolled once when the
+     * target is acquired and kept while it stays locked. The previous Auto point was
+     * the hitbox spot nearest to the eyes - it slid across the body surface with the
+     * shooter's own movement and sat on the silhouette edge, where any spread missed.
+     * An interior point keeps shots inside the body, and keeping the roll while the
+     * same target stays locked keeps consecutive shots grouped on one spot. Entities
+     * that are not the locked target resolve to the box center, so a target selection
+     * scan over a crowd does not re-roll the point per candidate. The configured head
+     * chance percent of newly locked targets aim at the eyes instead.
+     */
+    private Vec3 randomAimPoint(Entity entity) {
         AABB box = entity.getBoundingBox();
-        if (box.contains(eyes)) {
-            return eyes;
+        if (entity != aimTarget) {
+            return box.getCenter();
         }
-
-        // nearest point of the hitbox to the eyes, so the crosshair only has to
-        // travel to whatever part of the target is actually exposed
+        if (randomAimEntity != entity) {
+            randomAimEntity = entity;
+            AimAssistConfig config = ConfigStore.instance.getConfig().aimAssist;
+            randomAimHead = RANDOM.nextInt(100) < config.autoHeadChance;
+            // horizontal fractions stay well inside the box, vertical stays in the
+            // torso band away from head and feet
+            randomAimX = (RANDOM.nextDouble() - 0.5) * 0.5;
+            randomAimY = 0.25 + RANDOM.nextDouble() * 0.5;
+            randomAimZ = (RANDOM.nextDouble() - 0.5) * 0.5;
+        }
+        if (randomAimHead) {
+            return entity.getEyePosition();
+        }
         return new Vec3(
-                MathUtils.clamp(eyes.x, box.minX, box.maxX),
-                MathUtils.clamp(eyes.y, box.minY, box.maxY),
-                MathUtils.clamp(eyes.z, box.minZ, box.maxZ));
+                (box.minX + box.maxX) / 2 + randomAimX * (box.maxX - box.minX),
+                box.minY + randomAimY * (box.maxY - box.minY),
+                (box.minZ + box.maxZ) / 2 + randomAimZ * (box.maxZ - box.minZ));
     }
 
     /**

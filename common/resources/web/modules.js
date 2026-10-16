@@ -266,6 +266,13 @@ module({
 });
 module({
     group: 'hacks',
+    name: 'Fake Ping',
+    component: 'FakePing',
+    path: 'fake-ping',
+    tags: ['fake', 'ping', 'latency']
+});
+module({
+    group: 'hacks',
     name: 'Blink',
     component: 'Blink',
     path: 'blink',
