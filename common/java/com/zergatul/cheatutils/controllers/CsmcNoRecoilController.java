@@ -81,23 +81,29 @@ public class CsmcNoRecoilController {
                 active && config.mode == 4 && snapshotValid,
                 yRot,
                 xRot);
-        // The rewrite has no punch magnitude of its own to scale - its recoil reaches the shot direction
-        // as the two offsets of TableRecoil.direction - so dead aim and locked legacy are the same thing
-        // there: drop the offsets. View kick and locked precise keep them, exactly as their names say.
-        pushRewriteSpreadOptions(active, active && (config.mode == 1 || config.mode == 3));
+        // The rewrite has no punch magnitude of its own to scale, so what each mode wants has to be
+        // expressed through its three seams instead. holdView stops the camera delta from ever entering
+        // the player rotation, which is what makes the shot direction clean without a snapshot;
+        // zeroRecoil drops the recoil table's residual from that direction; noSpread is shared by all
+        // four modes, exactly as in the original. Modes 1, 3 and 4 all hold the view, and 1 and 3 also
+        // drop the offsets - the rewrite offers nothing to separate them further.
+        pushRewriteSpreadOptions(
+                active,
+                active && (config.mode == 1 || config.mode == 3),
+                active && (config.mode == 1 || config.mode == 3 || config.mode == 4));
     }
 
     /** Same reflection arrangement as {@link #pushSpreadOptions}, for the rewrite's holder. */
-    private void pushRewriteSpreadOptions(boolean noSpread, boolean zeroRecoil) {
+    private void pushRewriteSpreadOptions(boolean noSpread, boolean zeroRecoil, boolean holdView) {
         try {
             if (rewriteSpreadOptionsSetter == null && !rewriteSpreadOptionsSearched) {
                 rewriteSpreadOptionsSetter = Class
                         .forName("com.zergatul.cheatutils.rewrite.RewriteSpreadOptions")
-                        .getMethod("update", boolean.class, boolean.class);
+                        .getMethod("update", boolean.class, boolean.class, boolean.class);
                 rewriteSpreadOptionsSearched = true;
             }
             if (rewriteSpreadOptionsSetter != null) {
-                rewriteSpreadOptionsSetter.invoke(null, noSpread, zeroRecoil);
+                rewriteSpreadOptionsSetter.invoke(null, noSpread, zeroRecoil, holdView);
             }
         } catch (Throwable error) {
             // absent on loaders without the rewrite source set, or the class was renamed
