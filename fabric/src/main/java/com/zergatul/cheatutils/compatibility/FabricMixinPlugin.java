@@ -29,6 +29,9 @@ public class FabricMixinPlugin extends MixinPlugin {
             // 5.14 and earlier: shot direction, whose spread magnitude comes from W
             "MixinCsmcSpreadLegacy", new String[] {"me/fadeorite/csmcmod/b$2j.class", "me/fadeorite/csmcmod/W"});
 
+    /** Id of the CSMC protocol rewrite mod, whose classes are named and need no class-file inspection. */
+    private static final String CSMC_REWRITE_MOD_ID = "csmc_rewrite";
+
     private final Logger logger = LogManager.getLogger(FabricMixinPlugin.class);
 
     @Override
@@ -65,7 +68,24 @@ public class FabricMixinPlugin extends MixinPlugin {
             }
         }
 
+        // The rewrite is an independent implementation with a fixed mod id and named classes, so presence
+        // of the mod is proof enough - no class file has to be inspected. It also declares
+        // "breaks: csmcmod", so the two can never be loaded together and these gates cannot both pass.
+        if (mixinClassName.startsWith("com.zergatul.cheatutils.mixins.fabric.compatibility.rewrite.")) {
+            if (isModLoaded(CSMC_REWRITE_MOD_ID)) {
+                logger.info("CSMC rewrite detected. Will apply {}.", mixinClassName);
+                return true;
+            } else {
+                return false;
+            }
+        }
+
         return super.shouldApplyMixin(targetClassName, mixinClassName);
+    }
+
+    private static boolean isModLoaded(String id) {
+        return FabricLoaderImpl.INSTANCE.getModsInternal().stream()
+                .anyMatch(m -> m.getMetadata().getId().equals(id));
     }
 
     /**

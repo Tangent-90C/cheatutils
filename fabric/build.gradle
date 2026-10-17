@@ -78,20 +78,38 @@ sourceSets {
         // already depends on this source set.
         compileClasspath += sourceSets.main.compileClasspath - sourceSets.main.output
     }
+
+    // Mixins into the CSMC protocol rewrite mod (id csmc_rewrite). Same shape as csmc: the rewrite is
+    // not a compile-time dependency, so the annotation processor cannot validate these targets either.
+    // Every hooked signature is primitive or the rewrite's own record, so the callbacks need no rewrite
+    // type on the compile classpath and the target names stay strings.
+    rewrite {
+        java {
+            srcDir 'src/rewrite/java'
+        }
+        compileClasspath += sourceSets.main.compileClasspath - sourceSets.main.output
+    }
 }
 
 tasks.named('compileCsmcJava') {
     options.annotationProcessorPath = files()
 }
 
+tasks.named('compileRewriteJava') {
+    options.annotationProcessorPath = files()
+}
+
 compileJava {
     dependsOn tasks.named('compileCsmcJava')
+    dependsOn tasks.named('compileRewriteJava')
 }
 
 sourceSets.main.runtimeClasspath += sourceSets.csmc.output
+sourceSets.main.runtimeClasspath += sourceSets.rewrite.output
 
 jar {
     from sourceSets.csmc.output
+    from sourceSets.rewrite.output
 }
 
 processResources {
